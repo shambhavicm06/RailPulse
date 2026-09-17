@@ -1,0 +1,8 @@
+study,variant,n_features,MAE,MAE_reduction_pct_vs_isolated,radius,marginal_MAE_gain
+ablation_1_isolated_vs_graph,isolated_only,4,9.52,0.0,,
+ablation_1_isolated_vs_graph,isolated+static_graph,14,7.723,18.87,,
+ablation_1_isolated_vs_graph,isolated+dynamic_network,8,5.714,39.98,,
+ablation_1_isolated_vs_graph,full_graph_aware,19,5.109,46.34,,
+ablation_2_radius_of_influence,r1 (1-edge ring),16,5.288,44.45,1.0,
+ablation_2_radius_of_influence,r1+r2 (2-edge ring),17,5.188,45.5,2.0,0.1
+ablation_2_radius_of_influence,r1+r2+r3 (3-edge ring),18,5.109,46.34,3.0,0.08

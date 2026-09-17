@@ -1,0 +1,16 @@
+# Runtime requirements for the RailPulse dashboard (FastAPI).
+# Gradio is omitted (the dashboard is served by FastAPI). CatBoost is included so
+# all 5 selectable models in the model menu are loadable on the deployed box.
+numpy>=1.26
+pandas>=2.1
+scikit-learn>=1.4
+networkx>=3.2
+matplotlib>=3.8
+joblib>=1.3
+xgboost>=2.0
+lightgbm>=4.3
+catboost>=1.2.5
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9
+requests>=2.28

@@ -1,0 +1,7 @@
+current_station,train_type,hour,day,weather,current_delay_min,destination,upcoming_station
+Mysuru,Shatabdi,17,Monday,Clear,45,KSR Bengaluru,Mandya
+KSR Bengaluru,Express,8,Tuesday,Rain,20,Hubballi,Tumakuru
+Arsikere,Passenger,18,Friday,Fog,30,Mysuru,Hassan
+Kengeri,MEMU,19,Saturday,Clear,10,Mysuru,Bidadi
+Hubballi,Superfast,7,Monday,Clear,25,KSR Bengaluru,Haveri
+Yesvantpur,Intercity,9,Wednesday,Storm,50,Belagavi,Tumakuru

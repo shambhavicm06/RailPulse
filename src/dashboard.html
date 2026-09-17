@@ -1,0 +1,2499 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/lib/leaflet.css">
+<script src="/lib/leaflet.js"></script>
+<title>RailPulse — Indian Railway Network · Cascade Analysis</title>
+<style>
+/* ============================================================================
+   RailPulse — professional design system (LIGHT theme first)
+   Tokens keep the SAME names the app JS reads (--neon, --s-*, --roadcase, …)
+   ========================================================================== */
+:root{
+  --font:'Inter','Segoe UI',system-ui,-apple-system,'Roboto',sans-serif;
+  --radius:12px; --radius-sm:9px;
+  --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+  --shadow:0 1px 3px rgba(16,24,40,.08),0 8px 24px rgba(16,24,40,.07);
+  --shadow-md:0 6px 16px rgba(16,24,40,.10),0 16px 40px rgba(16,24,40,.12);
+  --primary:#4f46e5; --primary-hover:#4338ca; --primary-active:#3730a3;
+  --primary-tint:rgba(79,70,229,.16); --focus-ring:rgba(79,70,229,.28);
+  --trans:150ms cubic-bezier(.4,0,.2,1);
+  --grad-brand:linear-gradient(135deg,#4f46e5 0%,#7c3aed 100%);
+  --grad-primary:linear-gradient(135deg,#4f46e5 0%,#6d28d9 55%,#7c3aed 100%);
+  --acc-blue:#2563eb; --acc-indigo:#4f46e5; --acc-violet:#7c3aed; --acc-teal:#0891b2;
+  --acc-cyan:#06b6d4; --acc-green:#16a34a; --acc-amber:#d97706; --acc-rose:#e11d48;
+
+  /* dark (kept as the alternate theme) */
+  --bg:#05070d; --panel:#0d1522; --panel2:rgba(13,21,34,0.8); --line:#1c2b3d;
+  --neon:#00e5ff; --red:#f02850; --orange:#f08800; --green:#00d050; --blue:#a8c0f8;
+  --txt:#d7e2ee; --mut:#7f93a8;
+  --input-bg:#0a1220; --input-fg:#e8f4ff;
+  --aside-bg:rgba(7,12,20,0.97);
+  --row-hover:rgba(0,229,255,0.05);
+  --nav-active:rgba(0,229,255,0.10);
+  --gridline:rgba(0,229,255,0.04);
+  --card-glow:0 0 50px rgba(0,229,255,0.16);
+  --brand-glow:0 0 18px rgba(0,229,255,0.6);
+  --title-glow:0 0 14px rgba(0,229,255,0.45);
+  --ocean:#071019; --land:#101d2c; --land-stroke:#24415c;
+  --roadcase:#0a0f16; --roadfill:#3c5a75; --routeroad:#f08800;
+  --maplabel:#eaf4ff; --label-halo:rgba(0,0,0,0.9);
+  --s-normal:#2fbf71; --s-minor:#f2c53d; --s-moderate:#f08c00; --s-severe:#e8304f; --s-critical:#a1122f;
+  --chip-bg:rgba(7,12,20,0.86); --chip-fg:#d7e2ee;
+  --alert-crit-bg:rgba(40,0,20,0.55); --alert-crit-glow:0 0 28px rgba(240,40,80,0.35);
+  --alert-high-bg:rgba(40,24,0,0.50); --alert-high-glow:0 0 24px rgba(240,136,0,0.30);
+  --alert-med-bg:rgba(0,20,30,0.55);  --alert-med-glow:0 0 24px rgba(0,229,255,0.18);
+  --alert-low-bg:rgba(0,20,12,0.50);  --alert-low-glow:0 0 20px rgba(0,208,80,0.25);
+  --surface:#0d1522; --surface-2:#0a1220; --headline:#ffffff; --subtle-line:#22324a;
+}
+:root[data-theme="light"]{
+  --bg:#f3f5fb; --panel:#ffffff; --panel2:#f7f8fd; --line:#e4e8f2;
+  --neon:#4f46e5; --red:#dc2626; --orange:#f59e0b; --green:#16a34a; --blue:#2563eb;
+  --txt:#1c2434; --mut:#64748b;
+  --input-bg:#ffffff; --input-fg:#1c2434;
+  --aside-bg:#0f172a;
+  --aside-txt:#e2e8f0; --aside-mut:#94a3b8; --aside-line:#1e293b;
+  --row-hover:rgba(79,70,229,0.06);
+  --nav-active:#eef2ff;
+  --gridline:transparent;
+  --card-glow:none;
+  --brand-glow:none;
+  --title-glow:none;
+  --ocean:#dbe7f0; --land:#e3ecf3; --land-stroke:#c3d2e0;
+  --roadcase:#b7c4d4; --roadfill:#ffffff; --routeroad:#e07600;
+  --maplabel:#22303c; --label-halo:rgba(255,255,255,0.94);
+  --s-normal:#16a34a; --s-minor:#f59e0b; --s-moderate:#f97316; --s-severe:#dc2626; --s-critical:#991b1b;
+  --chip-bg:#ffffff; --chip-fg:#1c2434; --primary-tint:#eef2ff;
+  --alert-crit-bg:rgba(220,38,38,0.07);
+  --alert-high-bg:rgba(245,158,11,0.10);
+  --alert-med-bg:rgba(79,70,229,0.07);
+  --alert-low-bg:rgba(22,163,74,0.08);
+  --surface:#ffffff; --surface-2:#f2f4fc; --headline:#0f172a; --subtle-line:#e4e8f2;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0; height:100%;}
+body{
+  color:var(--txt); background:var(--bg);
+  font-family:var(--font); font-size:15.5px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  transition:background var(--trans), color var(--trans);
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(var(--gridline) 1px, transparent 1px),
+    linear-gradient(90deg, var(--gridline) 1px, transparent 1px);
+  background-size:42px 42px;
+}
+:root[data-theme="light"] body::before{display:none;}
+.wrap{position:relative; z-index:1;}
+
+/* focus visibility (keyboard) */
+:focus-visible{outline:2px solid var(--primary); outline-offset:2px; border-radius:6px;}
+button{cursor:pointer; font-family:inherit;}
+select{cursor:pointer;}
+
+/* ============================ THEME TOGGLE ============================ */
+#themeToggle{
+  position:fixed; top:14px; right:18px; z-index:200;
+  background:var(--panel); border:1px solid var(--line); color:var(--txt);
+  padding:8px 14px; border-radius:999px; cursor:pointer; font-size:13px; font-weight:600;
+  letter-spacing:.2px; box-shadow:var(--shadow-sm); transition:all var(--trans);
+}
+#themeToggle:hover{border-color:var(--primary); color:var(--primary); box-shadow:var(--shadow);}
+
+/* ============================ AUTH ============================ */
+#auth{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+.authcard{
+  width:100%; max-width:452px; padding:36px 40px 30px;
+  background:var(--panel); border:1px solid var(--line); border-radius:16px;
+  box-shadow:var(--shadow-md);
+}
+.brand{text-align:center; margin-bottom:8px;}
+.brand .logo{font-size:32px; font-weight:800; letter-spacing:-.5px; background:var(--grad-brand); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; color:transparent;}
+.brand .tag{color:var(--mut); font-size:14px; margin-top:3px;}
+.authswitch{display:flex; gap:8px; margin:22px 0 18px; background:var(--surface-2);
+  border:1px solid var(--line); border-radius:10px; padding:4px;}
+.authswitch button{
+  flex:1; padding:10px; background:transparent; border:none;
+  color:var(--mut); border-radius:8px; cursor:pointer; font-weight:600; font-size:14.5px;
+  transition:all var(--trans);
+}
+.authswitch button:hover{color:var(--txt);}
+.authswitch button.active{color:#fff; background:var(--grad-primary); box-shadow:var(--shadow-sm);}
+.welcome{color:var(--mut); text-align:center; font-size:14.5px; margin-bottom:16px;}
+.welcome b{color:var(--txt);}
+.authcard label{display:block; margin-bottom:14px; font-size:13.5px; font-weight:600; color:var(--mut);}
+.authcard input{
+  width:100%; margin-top:7px; padding:12px 13px; font-size:15px;
+  background:var(--input-bg); color:var(--input-fg); border:1px solid var(--line);
+  border-radius:var(--radius-sm); outline:none; transition:border-color var(--trans), box-shadow var(--trans);
+}
+.authcard input:hover{border-color:var(--subtle-line);}
+.authcard input:focus{border-color:var(--primary); box-shadow:0 0 0 3px var(--focus-ring);}
+.btn{
+  width:100%; padding:12px 18px; font-size:15px; font-weight:600; letter-spacing:.2px;
+  background:var(--grad-primary); color:#fff; border:none;
+  border-radius:var(--radius-sm); cursor:pointer; margin-top:4px;
+  box-shadow:0 4px 14px rgba(79,70,229,.28);
+  transition:filter var(--trans), box-shadow var(--trans), transform var(--trans);
+}
+.btn:hover{filter:brightness(1.07); box-shadow:0 8px 22px rgba(79,70,229,.38); transform:translateY(-1px);}
+.btn:active{filter:brightness(.94); transform:translateY(1px); box-shadow:0 2px 8px rgba(79,70,229,.3);}
+.btn:disabled{opacity:.5; cursor:not-allowed; box-shadow:none; transform:none; filter:none;}
+.btn.small{width:auto; padding:10px 20px; font-size:14.5px;}
+.btn.ghost{
+  background:var(--panel); color:var(--primary); border:1px solid var(--line);
+}
+.btn.ghost:hover{background:var(--primary-tint); border-color:var(--primary); color:var(--primary-hover); box-shadow:var(--shadow-sm);}
+.btn.ghost:active{background:var(--primary-tint); border-color:var(--primary-active);}
+.btn.danger{background:var(--panel); color:var(--red); border:1px solid var(--red);}
+.btn.danger:hover{background:var(--red); color:#fff;}
+.err{color:var(--red); text-align:center; margin-top:12px; font-size:14px;}
+.ok{color:var(--green); text-align:center; margin-top:12px; font-size:14px;}
+.hint{color:var(--mut); text-align:center; font-size:13px; margin:16px 0 0;}
+.hint b{color:var(--primary);}
+
+/* ============================ APP SHELL ============================ */
+#app{display:none; min-height:100vh;}
+.shell{display:flex; min-height:100vh;}
+aside{
+  width:244px; flex:0 0 244px; background:var(--aside-bg);
+  border-right:1px solid var(--line); display:flex; flex-direction:column;
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+}
+aside .brand{padding:22px 18px 16px; border-bottom:1px solid var(--line); text-align:left;}
+aside .brand .logo{font-size:22px;}
+aside .brand .tag{font-size:12.5px;}
+nav{padding:12px 12px; flex:1;}
+.navbtn{
+  display:flex; align-items:center; gap:11px; width:100%; padding:11px 13px; margin:2px 0;
+  background:transparent; border:none; border-radius:var(--radius-sm); cursor:pointer;
+  color:var(--mut); font-size:14.5px; font-weight:500; text-align:left;
+  transition:background var(--trans), color var(--trans);
+}
+.navbtn:hover{background:var(--row-hover); color:var(--txt);}
+.navbtn.active{background:var(--nav-active); color:var(--primary); font-weight:600;
+  box-shadow:inset 3px 0 0 var(--primary);}
+.navbtn .ic{width:22px; text-align:center; font-size:16px;}
+aside .userfoot{border-top:1px solid var(--line); padding:16px;}
+aside .userfoot .who{font-size:14.5px; font-weight:700; color:var(--txt);}
+aside .userfoot .sub{font-size:12px; color:var(--mut); margin-top:2px;}
+
+main{flex:1; min-width:0; padding:0 0 48px;}
+.topbar{
+  display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  padding:18px 28px 16px; border-bottom:1px solid var(--line); background:var(--panel);
+}
+.topbar h1{font-size:26px; margin:0; color:var(--headline); font-weight:800; letter-spacing:-.3px; line-height:1.2;}
+.topbar .sub{color:var(--mut); font-size:14px; margin-top:4px;}
+.topbar-right{display:flex; align-items:center; gap:10px;}
+.sys-status{
+  display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:999px;
+  background:var(--surface-2); border:1px solid var(--line); color:var(--mut); font-size:13px; font-weight:600;
+}
+.sys-status .dot{width:9px; height:9px; border-radius:50%; background:var(--orange); flex:none;}
+.sys-status.on .dot{background:var(--green); box-shadow:0 0 0 3px rgba(27,158,87,.18);}
+.sys-status.on{color:var(--green); border-color:rgba(27,158,87,.35);}
+.sys-status.off .dot{background:var(--red); box-shadow:0 0 0 3px rgba(215,38,61,.18);}
+.sys-status.off{color:var(--red);}
+.logout{
+  background:var(--panel); color:var(--red); border:1px solid var(--line);
+  padding:9px 16px; border-radius:var(--radius-sm); cursor:pointer; font-weight:600; font-size:13.5px;
+  transition:all var(--trans); margin-top:12px;
+}
+.logout:hover{background:var(--red); color:#fff; border-color:var(--red);}
+
+.page{display:none; padding:22px 28px;}
+.page.active{display:block; animation:pagein .18s ease;}
+@keyframes pagein{from{opacity:0; transform:translateY(3px);} to{opacity:1; transform:none;}}
+#statusChips{display:flex; gap:12px; flex-wrap:wrap; margin-bottom:18px;}
+
+/* ============================ CARDS & CHIPS ============================ */
+.chip{border:1px solid var(--line); border-radius:var(--radius); padding:12px 16px;
+  background:var(--chip-bg); box-shadow:var(--shadow-sm); transition:box-shadow var(--trans), transform var(--trans);}
+.chip:hover{box-shadow:var(--shadow); transform:translateY(-1px);}
+.chip .k{color:var(--mut); font-size:11.5px; font-weight:600; letter-spacing:.7px; text-transform:uppercase;}
+.chip .v{font-weight:700; font-size:15.5px; margin-top:3px; color:var(--txt);}
+.chip .v.neon{color:var(--primary);}
+
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin-bottom:18px;}
+.field label{display:block; font-size:13.5px; font-weight:600; color:var(--mut); margin-bottom:7px;}
+.field .tip{font-weight:400; color:var(--mut); font-size:12px; margin-top:6px; line-height:1.45;}
+.field select,.field input[type=number],.field input[type=text],.field input[type=url],.field input[type=file],.field input[type=email],.field input[type=password]{
+  width:100%; min-height:42px; padding:10px 12px; background:var(--input-bg); color:var(--input-fg);
+  border:1px solid var(--line); border-radius:var(--radius-sm); font-size:15px; outline:none; font-family:inherit;
+  transition:border-color var(--trans), box-shadow var(--trans);
+}
+.field select:hover,.field input:hover{border-color:var(--subtle-line);}
+.field select:focus,.field input:focus{border-color:var(--primary); box-shadow:0 0 0 3px var(--focus-ring);}
+.field input[type=file]{padding:9px 10px;}
+.range-val{color:var(--primary); font-weight:700; font-size:15px; float:right;}
+input[type=range]{width:100%; accent-color:var(--primary); min-height:28px;}
+
+/* ============================ PANELS & NOTES ============================ */
+.panel-box{
+  border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px;
+  background:var(--panel); margin-top:16px; box-shadow:var(--shadow-sm); overflow-x:auto;
+  transition:box-shadow var(--trans);
+}
+.panel-box:hover{box-shadow:var(--shadow);}
+.panel-box h3{margin:0 0 12px; font-size:17px; font-weight:700; color:var(--headline); letter-spacing:.1px;}
+details{margin-top:16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); box-shadow:var(--shadow-sm);}
+summary{cursor:pointer; padding:13px 18px; color:var(--primary); font-size:14.5px; font-weight:600;}
+details .inner{padding:6px 18px 16px; overflow:auto;}
+
+/* ============================ ALERT / SEVERITY CARDS ============================ */
+.alert{border-radius:var(--radius); padding:18px 20px; margin-top:16px;
+  border:1px solid var(--line); border-left:4px solid var(--primary);
+  background:var(--alert-med-bg); box-shadow:var(--shadow-sm);}
+.alert.critical{border-left-color:var(--red); background:var(--alert-crit-bg);}
+.alert.high{border-left-color:var(--orange); background:var(--alert-high-bg);}
+.alert.medium{border-left-color:var(--primary); background:var(--alert-med-bg);}
+.alert.low{border-left-color:var(--green); background:var(--alert-low-bg);}
+.alert h2{margin:0 0 8px; font-size:16.5px; letter-spacing:.2px;}
+.alert p{margin:6px 0; font-size:14.5px; line-height:1.6;}
+.alert ul{margin:8px 0 0; padding-left:20px; font-size:14px;}
+.alert li{margin:4px 0;}
+
+/* ============================ TABLES ============================ */
+table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px;}
+th{
+  color:var(--mut); text-align:left; padding:11px 12px;
+  border-bottom:2px solid var(--line); background:var(--surface-2);
+  letter-spacing:.6px; font-size:11.5px; font-weight:700; text-transform:uppercase;
+  white-space:nowrap;
+}
+td{padding:11px 12px; border-bottom:1px solid var(--line); color:var(--txt); vertical-align:middle;}
+tbody tr:nth-child(even) td{background:var(--surface-2);}
+tbody tr:hover td{background:var(--row-hover);}
+.table-scroll, #centralityTable,#historyTable,#datasetTable,#demoTable,#ablationTable,#stationDelay,#cascadeList{overflow-x:auto;}
+
+.muted{color:var(--mut); font-size:14px;}
+.mono{font-family:'JetBrains Mono',Consolas,'Courier New',monospace;}
+.img-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+.img-grid img,.analytics-hero{width:100%; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); box-shadow:var(--shadow-sm);}
+.img-cap{color:var(--mut); font-size:13px; margin:8px 0 18px;}
+.note{border-left:4px solid var(--primary); padding:14px 18px; background:var(--panel);
+  border-radius:var(--radius-sm); color:var(--mut); font-size:14px; margin-top:16px; line-height:1.7;
+  border-top:1px solid var(--line); border-right:1px solid var(--line); border-bottom:1px solid var(--line); box-shadow:var(--shadow-sm);}
+a{color:var(--primary);}
+
+/* ============================ MAP ============================ */
+.map-toolbar{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px;
+  align-items:end; margin-bottom:10px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:18px 20px; box-shadow:var(--shadow-sm);
+}
+.map-toolbar .btn{justify-self:start; width:auto; margin-top:0;}
+.mapbox{
+  border:1px solid var(--line); border-radius:var(--radius); background:var(--ocean);
+  overflow:hidden; position:relative; box-shadow:var(--shadow-sm);
+}
+#graphMap{ height:560px; }
+#routeMap{ height:460px; }
+#gpsMap{height:520px;}
+.legend{
+  display:flex; gap:8px 16px; flex-wrap:wrap; padding:12px 16px; margin:10px 0 4px;
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius-sm);
+  font-size:13px; box-shadow:var(--shadow-sm);
+}
+.legend .li{display:flex; align-items:center; gap:7px; color:var(--txt); font-weight:500;}
+.dot{width:12px; height:12px; border-radius:50%; display:inline-block; border:1px solid rgba(0,0,0,.18); flex:none;}
+.zoomctl{position:absolute; right:12px; top:12px; display:flex; flex-direction:column; gap:7px; z-index:1001;}
+.zoomctl button{
+  width:38px; height:38px; background:var(--panel); color:var(--txt);
+  border:1px solid var(--line); border-radius:var(--radius-sm); cursor:pointer; font-size:17px; font-weight:700;
+  box-shadow:var(--shadow-sm); transition:all var(--trans);
+}
+.zoomctl button:hover{background:var(--primary-tint); color:var(--primary); border-color:var(--primary);}
+.zoomctl button:active{background:var(--primary); color:#fff;}
+.map-status{position:absolute; left:12px; top:12px; background:var(--chip-bg); color:var(--chip-fg);
+  border:1px solid var(--line); border-radius:var(--radius-sm); padding:7px 12px; font-size:12.5px; max-width:62%;
+  z-index:1001; pointer-events:none; box-shadow:var(--shadow-sm);}
+
+/* Leaflet chrome — light/professional */
+.leaflet-container{ background:var(--ocean); font-family:inherit; }
+.leaflet-popup-content-wrapper{ background:var(--panel); color:var(--txt); border-radius:12px; box-shadow:var(--shadow-md); }
+.leaflet-popup-content{ margin:14px 16px; line-height:1.55; min-width:240px; }
+.leaflet-popup-tip{ background:var(--panel); }
+a.leaflet-popup-close-button{ color:var(--mut) !important; }
+.leaflet-bar{ border:1px solid var(--line) !important; box-shadow:var(--shadow-sm); }
+.leaflet-bar a{ background:var(--panel); color:var(--txt); border-bottom:1px solid var(--line); }
+.leaflet-bar a:hover{ background:var(--primary-tint); color:var(--primary); }
+.leaflet-control-attribution{ background:var(--panel2); color:var(--mut); font-size:10.5px; }
+.leaflet-control-attribution a{ color:var(--primary); }
+.leaflet-control-layers{ background:var(--panel); color:var(--txt); border:1px solid var(--line); box-shadow:var(--shadow-md); }
+.leaflet-control-layers label{ color:var(--txt); font-size:13px; }
+.leaflet-control-layers-expanded{ background:var(--panel); }
+.leaflet-tooltip{ background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:8px;
+  box-shadow:var(--shadow); font-size:12.5px; padding:7px 11px; }
+.leaflet-tooltip-top:before{ border-top-color:var(--line); }
+.rl-label{ position:absolute; transform:translate(-50%,-150%); white-space:nowrap; pointer-events:none;
+  font-size:11.5px; font-weight:600; line-height:1.15; color:var(--maplabel); letter-spacing:.2px;
+  text-shadow:0 0 3px var(--label-halo), 0 0 5px var(--label-halo), 0 1px 2px var(--label-halo); }
+.rl-incident{ width:26px; height:26px; border-radius:50%; border:2.5px solid #fff;
+  box-shadow:0 0 0 7px rgba(232,48,79,.30), 0 0 14px rgba(232,48,79,.6);
+  animation:rlpulse 1.6s ease-in-out infinite; }
+@keyframes rlpulse{ 0%,100%{ transform:scale(.72); opacity:.95; } 50%{ transform:scale(1.22); opacity:.65; } }
+.rl-arrow{ width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent;
+  border-bottom:11px solid #e07600; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+.map-popup h4{ margin:0 0 6px; font-size:13.5px; color:var(--txt); }
+.map-popup .pcode{ color:var(--primary); font-size:11px; font-weight:700; margin-left:6px; }
+.prow{ display:flex; justify-content:space-between; gap:18px; padding:4px 0; border-bottom:1px dashed var(--line); font-size:12.5px; }
+.prow span{ color:var(--mut); }
+.prow b{ color:var(--txt); }
+.plinks{ font-size:12px; color:var(--mut); margin-top:8px; line-height:1.6; }
+.plinks div{ color:var(--txt); margin-top:2px; }
+.gi-row{display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13.5px;}
+.gi-row:last-child{border-bottom:none;}
+.gi-row span{color:var(--mut);}
+.gi-row b{color:var(--txt);}
+.st-badge{color:#fff; padding:3px 11px; border-radius:20px; font-size:12px; font-weight:700;}
+.viewbtn{
+  background:var(--panel); border:1px solid var(--primary); color:var(--primary);
+  border-radius:var(--radius-sm); padding:7px 13px; font-size:13px; font-weight:600; cursor:pointer;
+  transition:all var(--trans); white-space:nowrap;
+}
+.viewbtn:hover{background:var(--primary); color:#fff;}
+.viewbtn:active{background:var(--primary-active);}
+
+/* ============================ DASHBOARD ============================ */
+.hero{
+  border:none; border-radius:16px; color:#fff; position:relative; overflow:hidden;
+  background:linear-gradient(120deg,#312e81 0%,#4f46e5 55%,#7c3aed 100%);
+  padding:30px 30px; box-shadow:0 20px 48px rgba(79,70,229,.30); margin-bottom:18px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:22px;
+}
+.hero::after{content:""; position:absolute; right:-70px; top:-70px; width:280px; height:280px; border-radius:50%;
+  background:radial-gradient(circle, rgba(255,255,255,.18), transparent 65%); pointer-events:none;}
+.hero .hero-badge{
+  font-size:12px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+  color:#fff; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.35);
+  padding:5px 13px; border-radius:999px; display:inline-block; margin-bottom:10px;
+}
+.hero h2{margin:0 0 8px; font-size:24px; font-weight:800; color:#fff; letter-spacing:-.3px;}
+.hero p{margin:0; color:rgba(255,255,255,.86); font-size:15px; max-width:640px; line-height:1.65;}
+.hero .hero-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:16px;}
+.hero .btn{background:#fff; color:#4f46e5; box-shadow:0 6px 18px rgba(0,0,0,.20);}
+.hero .btn:hover{filter:brightness(.98); box-shadow:0 10px 24px rgba(0,0,0,.24);}
+.hero .btn.ghost{background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.45);}
+.hero .btn.ghost:hover{background:rgba(255,255,255,.22); color:#fff; border-color:#fff;}
+.stat-card{
+  border:1px solid var(--line); border-top:3px solid var(--sc,var(--primary));
+  border-radius:var(--radius); background:var(--panel);
+  padding:18px 20px; box-shadow:var(--shadow-sm); transition:box-shadow var(--trans), transform var(--trans);
+}
+.stat-card:hover{box-shadow:var(--shadow); transform:translateY(-3px);}
+.stat-card .ic{width:46px; height:46px; border-radius:12px; background:var(--sc-tint,var(--primary-tint));
+  display:flex; align-items:center; justify-content:center; font-size:22px;
+  box-shadow:inset 0 0 0 1px var(--sc-soft,transparent);}
+.stat-card .t{font-size:13px; font-weight:600; color:var(--mut); margin:12px 0 4px;}
+.stat-card .v{font-size:23px; font-weight:800; color:var(--headline);}
+.stat-card .d{font-size:13px; color:var(--mut); margin-top:4px; line-height:1.5;}
+.sc-blue{--sc:#2563eb; --sc-tint:#dbeafe; --sc-soft:rgba(37,99,235,.2);}
+.sc-violet{--sc:#7c3aed; --sc-tint:#ede9fe; --sc-soft:rgba(124,58,237,.2);}
+.sc-teal{--sc:#0891b2; --sc-tint:#cffafe; --sc-soft:rgba(8,145,178,.2);}
+.sc-rose{--sc:#e11d48; --sc-tint:#ffe4e6; --sc-soft:rgba(225,29,72,.2);}
+
+/* ============================ PREDICTION FLOW ============================ */
+.flow{
+  display:flex; flex-wrap:wrap; gap:10px; align-items:stretch; margin-bottom:18px;
+}
+.flow .step{
+  flex:1 1 150px; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:14px 16px; box-shadow:var(--shadow-sm); position:relative;
+}
+.flow .step .n{
+  width:26px; height:26px; border-radius:50%; background:var(--grad-primary); color:#fff;
+  display:inline-flex; align-items:center; justify-content:center; font-size:12.5px; font-weight:800; margin-bottom:8px;
+  box-shadow:0 4px 10px rgba(79,70,229,.35);
+}
+.flow .step .t{font-size:13.5px; font-weight:700; color:var(--headline);}
+.flow .step .s{font-size:12.5px; color:var(--mut); margin-top:3px; line-height:1.45;}
+.flow .arrow{align-self:center; color:#a5b4fc; font-size:18px; font-weight:700;}
+
+/* ============================ EMPTY STATES ============================ */
+.empty{
+  border:1px dashed var(--line); border-radius:var(--radius); background:var(--surface-2);
+  color:var(--mut); text-align:center; padding:26px 20px; font-size:14.5px; line-height:1.6; margin-top:16px;
+}
+.empty .big{font-size:26px; display:block; margin-bottom:6px;}
+
+/* ============================ COPILOT ============================ */
+.copilot-grid{display:grid; grid-template-columns:1.55fr 1fr; gap:16px; margin-top:6px;}
+@media(max-width:900px){ .copilot-grid{grid-template-columns:1fr;} }
+.copilot-chatbox{display:flex; flex-direction:column; margin-top:0;}
+.copilot-chatbox h3{flex:none;}
+.copilot-log{flex:1; min-height:360px; max-height:56vh; overflow-y:auto; padding:8px 6px;
+  display:flex; flex-direction:column; gap:10px; border-top:1px solid var(--line); border-bottom:1px solid var(--line); margin:8px 0;}
+.msg{max-width:86%; padding:11px 15px; border-radius:14px; font-size:14px; line-height:1.65; overflow-wrap:anywhere;}
+.msg ul{margin:6px 0 2px; padding-left:18px;}
+.msg-user{align-self:flex-end; background:var(--grad-primary); color:#fff; border-bottom-right-radius:4px; box-shadow:0 4px 14px rgba(79,70,229,.28);}
+.msg-bot{align-self:flex-start; background:var(--surface-2); border:1px solid var(--line); border-bottom-left-radius:4px; color:var(--txt);}
+.msg-bot b{color:var(--primary);}
+.msg-bot .tools{margin-top:9px; font-size:11px; color:var(--mut); letter-spacing:.3px;}
+.msg-bot .tools span{display:inline-block; background:var(--primary-tint); color:var(--primary); border-radius:20px; padding:3px 10px; margin:0 5px 3px 0; font-weight:600;}
+.msg-bot .maplink{margin-top:9px;}
+.msg-bot .maplink button{background:var(--panel); border:1px solid var(--orange); color:var(--orange);
+  border-radius:var(--radius-sm); padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; transition:all var(--trans);}
+.msg-bot .maplink button:hover{background:var(--orange); color:#fff;}
+.copilot-inputrow{display:flex; gap:8px; margin-top:4px;}
+.copilot-inputrow input{flex:1; min-height:44px; padding:11px 14px; background:var(--input-bg); color:var(--input-fg);
+  border:1px solid var(--line); border-radius:var(--radius-sm); font-size:15px; outline:none; font-family:inherit;
+  transition:border-color var(--trans), box-shadow var(--trans);}
+.copilot-inputrow input:focus{border-color:var(--primary); box-shadow:0 0 0 3px var(--focus-ring);}
+.copilot-chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px;}
+.copilot-chips button{background:var(--panel); border:1px solid var(--line); color:var(--mut);
+  border-radius:999px; padding:7px 14px; font-size:13px; font-weight:500; cursor:pointer; transition:all var(--trans);}
+.copilot-chips button:hover{border-color:var(--primary); color:var(--primary); background:var(--primary-tint);}
+.copilot-typing{color:var(--mut); font-size:13px; padding:2px 6px; font-style:italic;}
+
+/* ============================ GPS ============================ */
+.demo-banner{
+  display:none; margin-bottom:14px; padding:13px 18px; border-radius:var(--radius);
+  border:1px solid var(--orange); background:var(--alert-high-bg); color:var(--orange);
+  font-weight:700; letter-spacing:.3px; font-size:14px;
+  animation:blink 1.8s ease-in-out infinite;
+}
+@keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.6;} }
+.gps-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;}
+.gps-stat{border:1px solid var(--line); border-radius:var(--radius); background:var(--surface-2); padding:13px 15px;
+  box-shadow:var(--shadow-sm); transition:box-shadow var(--trans);}
+.gps-stat:hover{box-shadow:var(--shadow);}
+.gps-stat span{display:block; color:var(--mut); font-size:11px; font-weight:600; letter-spacing:.6px; margin-bottom:4px; text-transform:uppercase;}
+.gps-stat b{color:var(--txt); font-size:15.5px; word-break:break-word;}
+.gps-train{
+  width:32px; height:32px; line-height:32px; text-align:center; font-size:19px;
+  background:var(--panel); border:2px solid var(--primary); border-radius:50%;
+  box-shadow:0 0 12px var(--focus-ring); transform:translate(-50%,-50%);
+}
+.pass-hint{font-size:12.5px; margin-top:5px; color:var(--mut);}
+.pass-hint.ok{color:var(--green);}
+.pass-hint.bad{color:var(--orange);}
+
+/* ============================ RESPONSIVE ============================ */
+@media(max-width:960px){
+  .shell{flex-direction:column;}
+  aside{width:100%; flex:none; height:auto; position:static; flex-direction:row; flex-wrap:wrap; overflow:visible;}
+  aside nav{display:flex; flex-wrap:wrap; padding:8px;}
+  .navbtn{width:auto; padding:9px 12px; font-size:13.5px;}
+  aside .brand{display:none;} aside .userfoot{display:none;}
+  .img-grid{grid-template-columns:1fr;}
+  .topbar h1{font-size:21px;}
+  .page{padding:16px 16px;}
+  .topbar{padding:14px 16px 12px;}
+  #graphMap{height:58vh;} #routeMap{height:46vh;} #gpsMap{height:52vh;}
+  .hero h2{font-size:20px;}
+}
+@media(max-width:560px){
+  body{font-size:15px;}
+  .grid{grid-template-columns:1fr;}
+  .map-toolbar{grid-template-columns:1fr 1fr;}
+  .authcard{padding:26px 22px 22px;}
+  .btn.small{width:100%;}
+  .flow .step{flex:1 1 100%;}
+  .copilot-inputrow{flex-wrap:wrap;}
+  .copilot-inputrow .btn{flex:1;}
+}
+
+
+/* ============ RICH LIGHT THEME — dark navy sidebar + colourful accents ============ */
+:root[data-theme="light"] body{
+  background:
+    radial-gradient(1100px 480px at 18% -8%, rgba(79,70,229,.09), transparent 60%),
+    radial-gradient(900px 420px at 100% -6%, rgba(124,58,237,.08), transparent 55%),
+    radial-gradient(700px 380px at 50% 120%, rgba(6,182,212,.06), transparent 60%),
+    var(--bg);
+}
+:root[data-theme="light"] aside{
+  background:linear-gradient(180deg,#0f172a 0%,#131c33 100%);
+  border-right-color:var(--aside-line);
+}
+:root[data-theme="light"] aside .brand{border-bottom-color:var(--aside-line);}
+:root[data-theme="light"] aside .brand .logo{
+  background:linear-gradient(135deg,#a5b4fc 0%,#c4b5fd 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+}
+:root[data-theme="light"] aside .brand .tag{color:var(--aside-mut);}
+:root[data-theme="light"] .navbtn{color:var(--aside-mut);}
+:root[data-theme="light"] .navbtn:hover{background:rgba(255,255,255,.07); color:#fff;}
+:root[data-theme="light"] .navbtn.active{
+  background:var(--grad-primary); color:#fff; font-weight:600;
+  box-shadow:0 6px 16px rgba(79,70,229,.40);
+}
+:root[data-theme="light"] aside .userfoot{border-top-color:var(--aside-line);}
+:root[data-theme="light"] aside .userfoot .who{color:#fff;}
+:root[data-theme="light"] aside .userfoot .sub{color:var(--aside-mut);}
+:root[data-theme="light"] .logout{background:transparent; border-color:var(--aside-line);}
+:root[data-theme="light"] .topbar{position:relative; border-bottom:none; box-shadow:0 1px 0 var(--line),0 8px 24px rgba(15,23,42,.05);}
+:root[data-theme="light"] .topbar::after{content:""; position:absolute; left:0; right:0; bottom:0; height:3px; background:var(--grad-primary);}
+:root[data-theme="light"] th{background:#eef2ff; color:#4338ca;}
+:root[data-theme="light"] .authcard{position:relative; overflow:hidden;}
+:root[data-theme="light"] .authcard::before{content:""; position:absolute; top:0; left:0; right:0; height:4px; background:var(--grad-primary);}
+
+/* ==================== GLASSMORPHISM ==================== */
+
+/* Aurora gradient backdrop behind the frosted glass */
+:root[data-theme="light"] body{
+  background:
+    radial-gradient(42% 58% at 10% 4%,  rgba(124,58,237,.30), transparent 62%),
+    radial-gradient(40% 52% at 92% 0%,  rgba(6,182,212,.28),  transparent 60%),
+    radial-gradient(46% 58% at 96% 64%, rgba(236,72,153,.22), transparent 60%),
+    radial-gradient(40% 50% at 4% 96%,  rgba(79,70,229,.28),  transparent 60%),
+    radial-gradient(55% 60% at 50% 118%, rgba(16,185,129,.18), transparent 62%),
+    linear-gradient(150deg,#eef1ff 0%,#f7f3ff 34%,#eefbff 68%,#fdf0f8 100%);
+  background-attachment:fixed;
+}
+:root[data-theme="dark"] body{
+  background:
+    radial-gradient(45% 60% at 12% 2%,  rgba(124,58,237,.42), transparent 60%),
+    radial-gradient(42% 54% at 92% 0%,  rgba(6,182,212,.30),  transparent 60%),
+    radial-gradient(48% 60% at 96% 62%, rgba(236,72,153,.26), transparent 60%),
+    radial-gradient(50% 60% at 50% 118%, rgba(16,185,129,.16), transparent 62%),
+    linear-gradient(155deg,#0a0f1e 0%,#101636 45%,#0a1526 100%);
+  background-attachment:fixed;
+}
+:root[data-theme="dark"] body::before{display:none;}
+
+/* translucent glass tokens */
+:root[data-theme="light"]{
+  --panel:rgba(255,255,255,.58); --panel2:rgba(255,255,255,.42);
+  --surface:rgba(255,255,255,.46); --surface-2:rgba(255,255,255,.40);
+  --chip-bg:rgba(255,255,255,.58); --input-bg:rgba(255,255,255,.68);
+  --line:rgba(99,102,241,.26); --subtle-line:rgba(99,102,241,.16);
+  --row-hover:rgba(99,102,241,.10);
+  --glass-border:rgba(255,255,255,.72);
+  --glass-shadow:0 8px 32px rgba(31,38,135,.16), inset 0 1px 0 rgba(255,255,255,.9);
+}
+:root[data-theme="dark"]{
+  --panel:rgba(15,23,42,.55); --panel2:rgba(15,23,42,.38);
+  --surface:rgba(15,23,42,.48); --surface-2:rgba(15,23,42,.40);
+  --chip-bg:rgba(7,12,20,.55); --input-bg:rgba(7,12,20,.52);
+  --line:rgba(148,163,184,.20); --subtle-line:rgba(148,163,184,.14);
+  --glass-border:rgba(148,163,184,.20);
+  --glass-shadow:0 8px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* frosted-glass cards */
+.panel-box,.chip,.flow .step,.map-toolbar,.legend,.gps-stat,details,.authswitch,.msg-bot,.copilot-chips button{
+  background:var(--panel);
+  -webkit-backdrop-filter:blur(16px) saturate(170%);
+  backdrop-filter:blur(16px) saturate(170%);
+  border:1px solid var(--glass-border);
+  box-shadow:var(--glass-shadow);
+}
+.stat-card{
+  background:var(--panel);
+  -webkit-backdrop-filter:blur(16px) saturate(170%);
+  backdrop-filter:blur(16px) saturate(170%);
+  border-left-color:var(--glass-border); border-right-color:var(--glass-border); border-bottom-color:var(--glass-border);
+  box-shadow:var(--glass-shadow);
+}
+.note,.alert,.empty,.topbar,.btn.ghost,.zoomctl button,.map-status,.sys-status,#themeToggle{
+  -webkit-backdrop-filter:blur(16px) saturate(160%);
+  backdrop-filter:blur(16px) saturate(160%);
+}
+.authcard{
+  background:var(--panel);
+  -webkit-backdrop-filter:blur(22px) saturate(180%);
+  backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid var(--glass-border);
+  box-shadow:var(--glass-shadow);
+}
+:root[data-theme="light"] aside{
+  background:linear-gradient(180deg, rgba(15,23,42,.70), rgba(23,32,58,.70));
+  -webkit-backdrop-filter:blur(22px) saturate(150%);
+  backdrop-filter:blur(22px) saturate(150%);
+  border-right:1px solid rgba(255,255,255,.14);
+}
+:root[data-theme="dark"] aside{
+  background:rgba(7,12,20,.60);
+  -webkit-backdrop-filter:blur(22px) saturate(150%);
+  backdrop-filter:blur(22px) saturate(150%);
+}
+.hero{
+  background:linear-gradient(120deg, rgba(49,46,129,.86), rgba(79,70,229,.86) 55%, rgba(124,58,237,.86));
+  -webkit-backdrop-filter:blur(18px) saturate(160%);
+  backdrop-filter:blur(18px) saturate(160%);
+  border:1px solid rgba(255,255,255,.30);
+}
+:root[data-theme="light"] th{background:rgba(99,102,241,.14); color:#4338ca;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- theme toggle (always visible) -->
+  <button id="themeToggle" title="Switch between light and dark theme">☀️ Light</button>
+
+  <!-- ================= AUTH ================= -->
+  <div id="auth">
+    <div class="authcard">
+      <div class="brand">
+        <div class="logo">RailPulse</div>
+        <div class="tag">Smarter Predictions. Smoother Journeys.</div>
+      </div>
+      <div class="authswitch">
+        <button id="tabSignin" class="active">Sign In</button>
+        <button id="tabRegister">Create Account</button>
+      </div>
+
+      <div id="signinForm">
+        <div class="welcome" id="welcomeMsg">Welcome back, <b>Dispatcher</b></div>
+        <label>Email or Username
+          <input id="user" type="text" value="admin" autocomplete="username">
+        </label>
+        <label>Password
+          <input id="pass" type="password" value="swr2026" autocomplete="current-password">
+        </label>
+        <button class="btn" id="loginBtn">Sign In</button>
+      </div>
+
+      <div id="registerForm" style="display:none;">
+        <label>Full Name<input id="regName" type="text" placeholder="e.g. Tanmayi Sharma"></label>
+        <label>Email<input id="regEmail" type="email" placeholder="you@railways.in"></label>
+        <label>Username<input id="regUser" type="text" placeholder="choose a username"></label>
+        <label>Password<input id="regPass" type="password" placeholder="create a password"></label>
+        <div class="pass-hint" id="passHint">8+ characters · uppercase · lowercase · digit · special character</div>
+        <label>Confirm Password<input id="regPass2" type="password" placeholder="re-enter password"></label>
+        <button class="btn" id="regBtn">Create Account</button>
+      </div>
+
+      <div class="err" id="authErr"></div>
+      <div class="ok" id="authOk"></div>
+      <p class="hint">Demo access — username: <b>admin</b> · password: <b>swr2026</b></p>
+    </div>
+  </div>
+
+  <!-- ================= APP ================= -->
+  <div id="app">
+    <div class="shell">
+      <aside>
+        <div class="brand">
+          <div class="logo" style="font-size:24px;">RailPulse</div>
+          <div class="tag">Smarter Predictions. Smoother Journeys.</div>
+        </div>
+        <nav id="nav"></nav>
+        <div class="userfoot">
+          <div class="who" id="userName">Dispatcher</div>
+          <div class="sub" id="userRole">Dispatcher · Indian Railways</div>
+          <button class="logout" id="logoutBtn" style="margin-top:10px;">⏻ LOGOUT</button>
+        </div>
+      </aside>
+
+      <main>
+          <div class="topbar">
+          <div>
+            <h1 id="pageTitle">INDIAN RAILWAY NETWORK — CASCADE ANALYSIS</h1>
+            <div class="sub" id="pageSub">Graph-Derived Feature Boosting · Network-Aware Delay Prediction</div>
+          </div>
+          <div class="topbar-right">
+            <span class="sys-status" id="sysStatus"><span class="dot"></span>Connecting…</span>
+          </div>
+        </div>
+
+                <!-- ===== DASHBOARD ===== -->
+        <section class="page active" id="page-dashboard">
+          <div id="statusChips"></div>
+          <div class="hero">
+            <div style="flex:1;min-width:280px;">
+              <span class="hero-badge">Rail Operations · AI Analytics</span>
+              <h2>Graph-based train delay prediction &amp; cascade impact analysis</h2>
+              <p>Predict how a delay at one station ripples across the Indian Railways network.
+                 Enter a train's current status and RailPulse maps the cascade — affected stations,
+                 risk level and suggested actions — in seconds.</p>
+              <div class="hero-actions">
+                <button class="btn small" data-go="prediction">🚆 Predict a delay</button>
+                <button class="btn small ghost" data-go="graph">🗺 Open network map</button>
+              </div>
+            </div>
+          </div>
+          <div class="grid">
+            <div class="stat-card sc-blue"><div class="ic">🚆</div><div class="t">Delay Prediction</div><div class="v">Live ML</div><div class="d">Forecast a train's arrival delay from its current status.</div></div>
+            <div class="stat-card sc-violet"><div class="ic">🌊</div><div class="t">Cascade Impact</div><div class="v">3-hop ripple</div><div class="d">Shows which nearby stations a delay will affect, hop by hop.</div></div>
+            <div class="stat-card sc-teal"><div class="ic">🛰</div><div class="t">Live Tracking</div><div class="v">GPS → risk</div><div class="d">Track a train and recompute risk at every position — live or simulated.</div></div>
+            <div class="stat-card sc-rose" id="statModelsCard"><div class="ic">🧠</div><div class="t">ML Models</div><div class="v" id="statModelsCount">5 ML Models</div><div class="d" id="statModelsDesc">Five trained models — pick any one for every prediction.</div></div>
+                      </div>
+          <div class="grid">
+            <div class="panel-box"><h3>▶ Quick start</h3>
+              <div class="muted" style="line-height:2;">
+                1. Go to <b style="color:var(--neon);">Delay Prediction</b> and enter a live train status.<br>
+                2. Watch the <b style="color:var(--neon);">Network Analysis</b> map animate the cascade (scroll to zoom, drag to pan).<br>
+                3. Upload batches via <b style="color:var(--neon);">Import Dataset</b> and open any row as a full prediction.
+              </div></div>
+            
+          </div>
+        </section>
+
+        <!-- ===== PREDICTION ===== -->
+        <section class="page" id="page-prediction">
+          <div class="flow">
+            <div class="step"><span class="n">1</span><div class="t">Enter train details</div><div class="s">Station, destination, delay and conditions.</div></div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="n">2</span><div class="t">Analyze network</div><div class="s">Graph features and congestion rings are computed.</div></div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="n">3</span><div class="t">Predict delay</div><div class="s">The ML model forecasts the arrival delay.</div></div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="n">4</span><div class="t">Calculate risk</div><div class="s">Severity level and at-risk stations are identified.</div></div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="n">5</span><div class="t">Show cascade impact</div><div class="s">Ripple map, affected route and suggested actions.</div></div>
+          </div>
+          <div class="panel-box"><h3>🚆 Train Information</h3>
+          <div class="grid">
+            <div class="field"><label>Current Station</label><select id="fCurrent" title="The station where the train currently is"></select></div>
+            <div class="field"><label>Destination <span class="muted">(optional)</span></label><select id="fDest" title="Where the train is heading — leave blank if unknown"></select></div>
+            <div class="field"><label>Upcoming Station <span class="muted">(optional)</span></label><select id="fUpcoming" title="The next station the train will pass"></select></div>
+            <div class="field"><label>Train Type</label>
+              <select id="fType" title="Type of train service"><option>Express</option><option>Superfast</option><option>Intercity</option>
+                <option>Passenger</option><option>MEMU</option><option>Freight</option></select>
+            </div>
+            <div class="field"><label>Train Number <span style="color:var(--red)">*</span></label><input type="text" id="fTrainNo" placeholder="Enter train number (e.g. 20807)" title="Five-digit train number, e.g. 20807" required></div>
+            <div class="field"><label>Weather</label>
+              <select id="fWeather" title="Weather at the train's current location"><option>Clear</option><option>Rain</option><option>Fog</option><option>Storm</option></select>
+            </div>
+            <div class="field"><label>ML Model <span class="muted" id="fModelCount"></span></label>
+              <select id="fModel" title="Choose which trained model makes this prediction"></select>
+            </div>
+            <div class="field"><label>Day of Week</label>
+              <select id="fDay" title="Day of the journey"><option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select>
+            </div>
+            <div class="field"><label>Scheduled Hour (24h) <span class="range-val" id="hourVal">14</span></label>
+              <input type="range" id="fHour" min="0" max="23" value="14" step="1" title="Hour of day the train is scheduled (0–23)">
+            </div>
+            <div class="field"><label>Current Delay (min) <span class="range-val" id="delayVal">0</span></label>
+              <input type="range" id="fDelay" min="0" max="120" value="0" step="5" title="How late the train is already running (0 = on time)">
+            </div>
+                      </div>
+          <div class="muted" style="margin-top:10px;"><b>Current Station</b> and <b>Train Number</b> are required — leave the rest blank to use sensible defaults.</div>
+          <button class="btn small" id="runBtn" style="margin-top:16px;">Run Cascade Prediction</button>
+          </div>
+
+          <div id="alert"><div class="empty"><span class="big">🛤</span>No prediction yet.<br>Fill in the train details above and click <b>Run Cascade Prediction</b> to begin.</div></div>
+
+          <div class="grid" style="grid-template-columns:1fr 1fr;">
+            <div class="panel-box"><h3>ROUTE DETAILS</h3><div id="routeDetails" class="muted"></div></div>
+            <div class="panel-box"><h3>STATION-WISE DELAY</h3><div id="stationDelay"></div></div>
+          </div>
+          <div class="panel-box"><h3>ROUTE MAP — PREDICTED JOURNEY</h3>
+            <div class="mapbox" id="routeMapBox">
+              <div id="routeMap"></div>
+              <div class="map-status" id="routeMapStatus" style="display:none;"></div>
+              <div class="zoomctl">
+                <button id="routeZoomIn" title="Zoom in">＋</button>
+                <button id="routeZoomOut" title="Zoom out">－</button>
+                <button id="routeFit" title="Fit route / reset">⤢</button>
+              </div>
+            </div>
+          </div>
+          <details><summary>Feature Snapshot (graph-flattened columns)</summary>
+            <div class="inner mono" id="featsOut" style="font-size:12px;"></div></details>
+        </section>
+
+                
+        <!-- ===== DISPATCHER COPILOT ===== -->
+        <section class="page" id="page-copilot">
+          <div class="copilot-grid">
+            <div class="panel-box copilot-chatbox">
+              <h3>🤖 DISPATCHER COPILOT</h3>
+              <div class="copilot-log" id="copilotLog"></div>
+              <div class="copilot-typing" id="copilotTyping" style="display:none;">● thinking…</div>
+              <div class="copilot-inputrow">
+                <button class="btn small" id="copilotMic" title="Speak your question">🎙</button>
+                <input id="copilotInput" type="text" autocomplete="off"
+                       placeholder="Type or speak — e.g. Mysuru delayed 45 min at 18:00 — which junctions choke first?">
+                <button class="btn small" id="copilotSend">Ask</button>
+              </div>
+              <div id="copilotVoiceStatus" class="muted" style="margin-top:6px;">🎙 Tap the mic and speak your question — it's transcribed, sent to the Copilot and read back aloud.</div>
+              <div class="copilot-chips" id="copilotChips"></div>
+            </div>
+            <div class="panel-box">
+              <h3>🧠 AGENTIC AI — HOW IT WORKS</h3>
+              <div id="copilotStatus" class="muted" style="margin-bottom:10px;"></div>
+              <div class="muted" style="line-height:1.8;">
+                The Copilot turns your question into <b style="color:var(--neon);">tool calls</b> against the live
+                system — the trained delay model, the NetworkX cascade engine and rail routing — then answers with
+                the real numbers.<br><br>
+                Ask about <b style="color:var(--neon);">predictions</b>, <b style="color:var(--neon);">choke points</b>,
+                <b style="color:var(--neon);">routes</b>, <b style="color:var(--neon);">mitigations</b> and
+                <b style="color:var(--neon);">what-if scenarios</b>. Answers that include a route or a cascade can be
+                shown directly on the map.<br><br>
+                <b style="color:var(--neon);">🎙 Voice input:</b> tap the mic and speak — the Web Speech API transcribes
+                your question, the Copilot answers, and the reply is read back aloud (🔊 to repeat).<br><br>
+                <span class="muted">Works offline out of the box; plug in an OpenAI-compatible key
+                (<span class="mono">COPILOT_LLM_KEY</span>) to upgrade to a full LLM agent.</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+<!-- ===== NETWORK GRAPH ===== -->
+        <section class="page" id="page-graph">
+          <div class="map-toolbar">
+            <div class="field"><label>Map view</label>
+              <select id="graphMode" title="What the map colours should show">
+                <option value="network" selected>Network view (all tracks)</option>
+                <option value="delay">Live delay view</option>
+                <option value="risk">Cascading risk view</option>
+              </select>
+            </div>
+            <div class="field"><label>Marker size by</label>
+              <select id="graphMetric" title="How important each station is — controls marker size">
+                <option value="degree">Connections (degree)</option>
+                <option value="betweenness_centrality" selected>Choke points (betweenness)</option>
+                <option value="pagerank">Station importance (PageRank)</option>
+                <option value="eigenvector_centrality">Influence (eigenvector)</option>
+              </select>
+            </div>
+            <div class="field"><label>Cascade source</label><select id="graphSource"></select></div>
+            <div class="field"><label>Delay (min) <span class="range-val" id="gDelayVal">0</span></label>
+              <input type="range" id="graphDelay" min="0" max="120" value="0" step="5">
+            </div>
+            <button class="btn small" id="animateBtn">Animate Cascade</button>
+            <button class="btn small ghost" id="clearEvent">Clear incident</button>
+          </div>
+          <div class="muted" style="margin:6px 2px 0;line-height:1.7;">
+            <b>Marker size by:</b> <b style="color:var(--primary);">Connections</b> = how many tracks a station has ·
+            <b style="color:var(--primary);">Choke points</b> = how often a station sits on the shortest path between others ·
+            <b style="color:var(--primary);">Importance</b> = how central a station is in the network ·
+            <b style="color:var(--primary);">Influence</b> = how connected a station is to other important stations.
+          </div>
+          <div class="legend">
+            <span class="li"><span class="dot" style="background:var(--s-normal)"></span> Normal</span>
+            <span class="li"><span class="dot" style="background:var(--s-minor)"></span> Minor delay</span>
+            <span class="li"><span class="dot" style="background:var(--s-moderate)"></span> Moderate delay</span>
+            <span class="li"><span class="dot" style="background:var(--s-severe)"></span> Severe delay</span>
+            <span class="li"><span class="dot" style="background:var(--s-critical)"></span> Critical cascade risk</span>
+            <span class="li"><span class="dot" style="background:var(--orange)"></span> Predicted route</span>
+            <span class="li"><span class="dot" style="background:var(--red)"></span> Incident</span>
+            <span class="li"><span class="dot" style="background:transparent; border:2px solid var(--green)"></span> Critical hub</span>
+          </div>
+          <div class="mapbox" id="graphMap">
+            <div class="zoomctl">
+              <button id="zoomIn" title="Zoom in">＋</button>
+              <button id="zoomOut" title="Zoom out">－</button>
+              <button id="zoomReset" title="Reset / fit network">⤢</button>
+              <button id="fitSel" title="Zoom to selected station">⌖</button>
+              <button id="fullscreenBtn" title="Full screen">⛶</button>
+            </div>
+            <div class="map-status" id="mapStatus">🗺 Loading railway network…</div>
+          </div>
+          <p class="muted" style="margin-top:8px;">
+            <b style="color:var(--neon);">Scroll to zoom · drag to pan · click a station to inspect &amp; zoom</b> —
+            switch <b style="color:var(--neon);">Map view</b> to colour the whole grid by live delay or cascading risk ·
+            <b style="color:var(--neon);">Animate Cascade</b> replays the ripple over 3 hops.
+          </p>
+          <div id="graphInfo" class="panel-box" style="display:none;">
+            <h3 id="graphInfoTitle">Station</h3><div id="graphInfoBody"></div>
+          </div>
+          <div id="cascadeList"></div>
+        </section>
+
+<!-- ===== LIVE TRAIN TRACKING (GPS) ===== -->
+        <section class="page" id="page-gps">
+          <div class="demo-banner" id="gpsDemoBanner">🛰 DEMO GPS MODE — simulated train moving along the real route · predictions are live, position is simulated</div>
+          <div class="map-toolbar">
+            <div class="field"><label>Tracking mode</label>
+              <select id="gpsMode">
+                <option value="demo" selected>🎬 Demo GPS (simulated)</option>
+                <option value="live">📡 Live GPS (device)</option>
+              </select>
+            </div>
+            <div class="field"><label>Train Number <span style="color:var(--red)">*</span></label><input type="text" id="gpsTrainNo" placeholder="Enter train number (e.g. 20807)" title="Five-digit train number, e.g. 20807" required></div>
+            <div class="field"><label>Origin (demo start)</label><select id="gpsOrigin"></select></div>
+            <div class="field"><label>Destination</label><select id="gpsDest"></select></div>
+            <div class="field"><label>Speed (km/h)</label><input type="number" id="gpsSpeed" value="60" min="10" max="160"></div>
+            <div class="field"><label>Current Delay (min)</label><input type="number" id="gpsDelay" value="0" min="0" max="200" step="1"></div>
+            <div class="field"><label>Train Type</label>
+              <select id="gpsType"><option>Express</option><option>Superfast</option><option>Intercity</option>
+                <option>Passenger</option><option>MEMU</option><option>Freight</option></select>
+            </div>
+            <div class="field"><label>Weather</label>
+              <select id="gpsWeather"><option>Clear</option><option>Rain</option><option>Fog</option><option>Storm</option></select>
+            </div>
+            <div class="field"><label>ML Model</label>
+              <select id="gpsModel" title="Choose which trained model makes this prediction"></select>
+            </div>
+            <div class="field"><label>Day</label>
+              <select id="gpsDay"><option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option></select>
+            </div>
+                        <button class="btn small" id="gpsStart">Start Tracking</button>
+            <button class="btn small ghost" id="gpsStop">Stop</button>
+          </div>
+          <div class="panel-box" id="gpsPanel">
+            <div class="muted">Choose a mode, set a train number / destination, then press <b style="color:var(--neon);">▶ Start Tracking</b>.
+              The train updates every 5 seconds — GPS position → nearest station → delay → ML prediction → NetworkX cascade → map risk.</div>
+          </div>
+          <div class="mapbox" id="gpsMapBox">
+            <div id="gpsMap"></div>
+            <div class="zoomctl">
+              <button id="gpsZoomIn" title="Zoom in">＋</button>
+              <button id="gpsZoomOut" title="Zoom out">－</button>
+              <button id="gpsFit" title="Fit network">⤢</button>
+            </div>
+            <div class="map-status" id="gpsMapStatus">🛰 Ready — press Start Tracking</div>
+          </div>
+          <div class="legend">
+            <span class="li"><span class="dot" style="background:var(--green)"></span> Low risk</span>
+            <span class="li"><span class="dot" style="background:var(--s-minor)"></span> Medium risk</span>
+            <span class="li"><span class="dot" style="background:var(--red)"></span> High / critical risk</span>
+            <span class="li"><span class="dot" style="background:var(--neon)"></span> Train (GPS)</span>
+          </div>
+          <div id="gpsAlert"></div>
+        </section>
+
+<!-- ===== IMPORT DATASET ===== -->
+        <section class="page" id="page-dataset">
+          <p class="muted">Upload a CSV of live train statuses. Columns (only <b>current_station</b> is mandatory):
+            <span class="mono">current_station, train_type, hour, day, weather, current_delay_min, destination, upcoming_station</span>.
+            After processing, click <b style="color:var(--neon);">🔍 View Prediction</b> on any row to open the full result.</p>
+          <div class="grid" style="grid-template-columns:auto auto; align-items:end;">
+            <div class="field"><label>Upload CSV</label><input type="file" id="fileInput" accept=".csv"></div>
+            <button class="btn small" id="procBtn">Process Dataset</button>
+          </div>
+          <p class="muted"><a href="/data-static/sample_input.csv" download>⬇ Download sample_input.csv</a></p>
+          <div id="datasetMsg" class="muted"></div>
+          <div id="datasetTable"></div>
+          <div id="exportLink"></div>
+        </section>
+
+        <!-- ===== DEMO RECORDS ===== -->
+        <section class="page" id="page-demo">
+          <p class="muted">Pre-canned dispatcher scenarios run live through the trained Voting Regressor.</p>
+          <button class="btn small" id="demoBtn">Load Demo Records</button>
+          <div id="demoTable"></div>
+        </section>
+
+        <!-- ===== GRAPH ENGINE ===== -->
+        <section class="page" id="page-graphengine">
+          <p class="muted">The NetworkX engine computes these per-station metrics once and flattens them
+            into tabular columns for the boosting models. Betweenness highlights the network's choke points.</p>
+          <div id="centralityTable"></div>
+          <div class="note">
+            <b>How the flattening works.</b> Degree, eigenvector centrality, PageRank and betweenness
+            summarise each station's <i>position</i> in the 2-D network as 1-D numbers. Together with the
+            dynamic congestion rings (the live delay of all trains within 1/2/3 edges), these columns give
+            classical gradient boosting "network-awareness" — at a fraction of a GNN's compute, and deployable
+            on legacy dispatcher hardware.
+          </div>
+        </section>
+
+        <!-- ===== PREDICTION HISTORY ===== -->
+        <section class="page" id="page-history">
+          <button class="btn small ghost" id="histRefresh">Refresh</button>
+          <div id="historyTable"></div>
+        </section>
+
+        <!-- ===== ANALYTICS ===== -->
+        <section class="page" id="page-analytics">
+          <div class="img-grid">
+            <div><img src="/static/figures/03_model_comparison.png" alt="bakeoff"><div class="img-cap">10-model bake-off</div></div>
+            <div><img src="/static/figures/04_radius_learning_curve.png" alt="radius"><div class="img-cap">Radius of influence — decay of delay</div></div>
+          </div>
+          <img src="/static/figures/05_feature_importance.png" alt="importance" style="width:100%; border:1px solid var(--line); border-radius:10px;">
+          <div class="img-cap">SHAP-style feature importance — congestion outweighs weather</div>
+          <div class="panel-box"><h3>ABLATION STUDIES</h3><div id="ablationTable"></div></div>
+        </section>
+
+        <!-- ===== SETTINGS ===== -->
+        <section class="page" id="page-settings">
+          <div class="panel-box"><h3>SYSTEM CONFIGURATION</h3><div id="settingsBody" class="muted"></div></div>
+          <div class="note">
+            Credentials can be overridden with the <span class="mono">SWR_USER</span> /
+            <span class="mono">SWR_PASS</span> environment variables. Accounts are stored in memory
+            (reset on restart) in this demo build.
+          </div>
+        </section>
+
+        <!-- ===== ABOUT ===== -->
+        <section class="page" id="page-about">
+          <div class="panel-box">
+            <h3>Project 17 — Graph-Derived Feature Boosting</h3>
+            <div class="muted" style="line-height:1.8;">
+              <b style="color:var(--txt);">The problem.</b> On the saturated Indian Railways network, a 40-minute
+              delay at a junction monopolises track clearance and forces secondary trains to halt — a
+              <i>cascading ripple effect</i>. Conventional models predict each train in isolation.<br><br>
+              <b style="color:var(--txt);">The idea.</b> Use Network Mathematics (eigenvector centrality, PageRank,
+              betweenness) to flatten the 2-D rail graph into 1-D tabular columns, then feed them to frugal,
+              explainable gradient-boosting ensembles — bypassing GNNs entirely.<br><br>
+              <b style="color:var(--txt);">The proof.</b> Two ablations: (1) isolated vs graph-aware features
+              (−46% MAE), and (2) the radius-of-influence sweep showing the delay ripple decays with distance.
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+async function api(path, opts){
+  const r = await fetch(path, opts);
+  if(!r.ok){ throw new Error("HTTP " + r.status); }
+  const ct = r.headers.get("content-type") || "";
+  return ct.includes("json") ? r.json() : r.text();
+}
+function esc(s){ return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function fmt(v, d=2){ return (v===null||v===undefined||isNaN(v)) ? "—" : Number(v).toFixed(d); }
+function setSelect(sel, val){ for(const o of sel.options){ if(o.value===val){ sel.value=val; return; } } }
+function levelVar(l){ return {CRITICAL:"var(--red)", HIGH:"var(--orange)", MEDIUM:"var(--neon)", LOW:"var(--green)"}[l] || "var(--neon)"; }
+function makeTable(data, columns){
+  let h = "<table><tr>" + columns.map(c => `<th>${c.label}</th>`).join("") + "</tr>";
+  data.forEach(row => { h += "<tr>" + columns.map(c => `<td>${esc(row[c.key])}</td>`).join("") + "</tr>"; });
+  return h + "</table>";
+}
+function csvToTable(csv){
+  const lines = csv.trim().split(/\r?\n/).filter(l => l.length);
+  if(lines.length < 2) return "<p class='muted'>No data</p>";
+  const head = lines[0].split(",");
+  const rows = lines.slice(1).map(l => l.split(","));
+  let h = "<table><tr>" + head.map(c => `<th>${esc(c)}</th>`).join("") + "</tr>";
+  rows.forEach(r => { h += "<tr>" + r.map(c => `<td>${esc(c)}</td>`).join("") + "</tr>"; });
+  return h + "</table>";
+}
+
+/* ============ SHARED STATE ============ */
+/* Declared up front: applyTheme() runs at startup and must not hit the
+   temporal dead zone of these `let` bindings. */
+let GRAPH = null;
+let FULL_NAME = "Dispatcher";
+let CENTRALITY_LOADED = false;
+let BATCH_ROWS = [];
+let CURR = {source:null, dest:null, route:[], delay:0, pred:0, level:"NORMAL", hops:null, impacts:null, step:3};
+let NODE_BY_ID = {}, EDGE_BY_KEY = {};
+let graphMap = null, routeMapInst = null, canvasRenderer = null;
+let BASE = {}, OV = {}, ROV = {}, currentBase = null, baseManual = false;
+let tileOnline = null, labelTimer = null;
+
+/* ============ THEME ============ */
+function isLight(){ return document.documentElement.getAttribute("data-theme") === "light"; }
+function applyTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  $("themeToggle").textContent = t === "light" ? "☀️ Light" : "🌙 Dark";
+  try{ localStorage.setItem("railpulse_theme", t); }catch(e){}
+  if(GRAPH){ applyVisual(); }
+  applyThemeBase();
+}
+applyTheme((function(){ try{ return localStorage.getItem("railpulse_theme") || "light"; }catch(e){ return "light"; } })());
+$("themeToggle").addEventListener("click", () => applyTheme(isLight() ? "dark" : "light"));
+
+/* ============ NAVIGATION ============ */
+const NAV = [
+  ["dashboard","🏠","Dashboard"],
+  ["prediction","🚆","Delay Prediction"],
+  ["copilot","🤖","Dispatcher Copilot"],
+  ["graph","🕸","Network Analysis"],
+  ["gps","🛰","Live Tracking"],
+  ["dataset","🗂","Import Dataset"],
+  ["demo","📼","Demo Records"],
+  ["graphengine","🔗","Station Analytics"],
+  ["history","🕘","Prediction History"],
+  ["analytics","📊","Analytics"],
+  ["settings","⚙️","Settings"],
+  ["about","ℹ️","About"],
+];
+const TITLES = {
+  dashboard:["Indian Railway Network — Cascade Analysis","Graph-derived feature boosting · network-aware delay prediction"],
+  prediction:["Delay Prediction","Enter a train's current status to forecast delays and cascade risk"],
+  copilot:["Dispatcher Copilot","Ask the network in plain language — AI over live graph analytics"],
+  graph:["Network Analysis","Interactive rail grid · incident → cascade path → critical hubs"],
+  gps:["Live Tracking","GPS → nearest station → delay → ML prediction → cascade risk → map"],
+  dataset:["Import Dataset","Upload a CSV of live train statuses for batch prediction"],
+  demo:["Demo Records","Pre-canned dispatcher scenarios"],
+  graphengine:["Station Analytics","Network centralities flattened into tabular features"],
+  history:["Prediction History","Recent dispatcher predictions"],
+  analytics:["Analytics","Ablations · feature importance · model comparison"],
+  settings:["Settings","System configuration"],
+  about:["About","The idea and the proof"],
+};
+function showPage(id){
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  $("page-" + id).classList.add("active");
+  if(id === "graph" && graphMap){ setTimeout(() => graphMap.invalidateSize(), 60); }
+  if(id === "prediction" && routeMapInst){ setTimeout(() => routeMapInst.invalidateSize(), 60); }
+  if(id === "gps"){ (GRAPH ? Promise.resolve(GRAPH) : getGraph()).then(() => { initGpsMap(); setTimeout(() => gpsMap && gpsMap.invalidateSize(), 60); }).catch(() => {}); }
+  document.querySelectorAll(".navbtn").forEach(b => b.classList.toggle("active", b.dataset.page === id));
+  $("pageTitle").textContent = TITLES[id][0];
+  $("pageSub").textContent = TITLES[id][1];
+  if(id === "graph" && !GRAPH){ loadGraph().catch(e => console.warn(e)); }
+  if(id === "graphengine" && !CENTRALITY_LOADED){ loadCentrality(); }
+  if(id === "history"){ loadHistory(); }
+  if(id === "settings"){ loadSettings(); }
+}
+function buildNav(){
+  $("nav").innerHTML = NAV.map(([id, ic, label]) =>
+    `<button class="navbtn ${id==="dashboard"?"active":""}" data-page="${id}"><span class="ic">${ic}</span>${label}</button>`
+  ).join("");
+  document.querySelectorAll(".navbtn").forEach(b => b.addEventListener("click", () => showPage(b.dataset.page)));
+}
+
+/* ============ MAP ENGINE — Leaflet + OpenStreetMap ============ */
+
+/* ---- status palette & helpers ---- */
+const STATUS_META = {
+  normal:   {label:"Normal",                css:"--s-normal"},
+  minor:    {label:"Minor delay",           css:"--s-minor"},
+  moderate: {label:"Moderate delay",        css:"--s-moderate"},
+  severe:   {label:"Severe delay",          css:"--s-severe"},
+  critical: {label:"Critical cascade risk", css:"--s-critical"},
+};
+function delayStatus(min){ if(min<5) return "normal"; if(min<15) return "minor"; if(min<30) return "moderate"; if(min<60) return "severe"; return "critical"; }
+function cssVar(name){ let v = getComputedStyle(document.documentElement).getPropertyValue(name); v = (v||"").trim(); return v || ""; }
+function statusHex(key){ const v = cssVar(STATUS_META[key].css); return v || "#2fbf71"; }
+function edgeKey(a,b){ return a < b ? a+"|"+b : b+"|"+a; }
+
+/* ---- NetworkX-derived computations (reuse GRAPH analytics) ---- */
+function bfsDist(src){
+  const dist = {[src]:0};
+  let q = [src], d = 0;
+  while(q.length){ d++; const nxt = []; q.forEach(s => (GRAPH.adj[s]||[]).forEach(nb => { if(dist[nb]===undefined){ dist[nb]=d; nxt.push(nb); } })); q = nxt; }
+  return dist;
+}
+function bfsHops(src){
+  const full = bfsDist(src); const hops = {};
+  Object.keys(full).forEach(k => { if(full[k] <= 3) hops[k] = full[k]; });
+  return hops;
+}
+function edgeSetFromRoute(route){
+  const s = new Set();
+  for(let i=0;i<route.length-1;i++){ s.add(route[i]+"|"+route[i+1]); s.add(route[i+1]+"|"+route[i]); }
+  return s;
+}
+function synthDelays(){
+  const hubs = [...GRAPH.nodes].sort((a,b)=>(b.betweenness_centrality||0)-(a.betweenness_centrality||0)).slice(0,4).map(n=>n.id);
+  const delays = {};
+  GRAPH.nodes.forEach(n => { delays[n.id] = 0; });
+  hubs.forEach((h, i) => {
+    const base = 26 + i*8;
+    const dist = bfsDist(h);
+    GRAPH.nodes.forEach(n => { if(dist[n.id] !== undefined) delays[n.id] += base*Math.exp(-0.6*dist[n.id]); });
+  });
+  GRAPH.nodes.forEach(n => { delays[n.id] = Math.min(120, Math.round(delays[n.id])); });
+  return delays;
+}
+function computeDelays(){
+  const base = synthDelays();
+  if(CURR.hops){
+    Object.entries(CURR.hops).forEach(([id]) => {
+      const v = CURR.impacts ? CURR.impacts[id] : undefined;
+      if(v !== undefined) base[id] = Math.max(base[id]||0, v);
+    });
+  }
+  return base;
+}
+function computeRisk(){
+  const delays = computeDelays();
+  const btMax = Math.max(...GRAPH.nodes.map(n=>n.betweenness_centrality||0)) || 1;
+  const out = {};
+  GRAPH.nodes.forEach(n => {
+    const dNorm = Math.min(1, (delays[n.id]||0)/90);
+    const bNorm = (n.betweenness_centrality||0)/btMax;
+    out[n.id] = Math.min(1, 0.6*dNorm + 0.4*bNorm);
+  });
+  return out;
+}
+function gridCongestion(id){
+  const delays = computeDelays();
+  const dist = bfsDist(id);
+  let score = 0, wsum = 0;
+  Object.entries(dist).forEach(([sid, d]) => {
+    if(d === 0 || d > 2) return;
+    const w = Math.exp(-d);
+    score += (delays[sid]||0)*w; wsum += w;
+  });
+  return wsum ? Math.min(100, score/wsum) : 0;
+}
+
+/* ---- tile layers (real OSM tiles + offline fallback) ---- */
+/* FlatTileLayer is created lazily so a missing Leaflet lib can never crash
+   the app at load time (login / prediction / tables must keep working). */
+let FlatTileLayer = null;
+function flatTileLayer(){
+  if(FlatTileLayer || typeof L === "undefined") return FlatTileLayer;
+  FlatTileLayer = L.GridLayer.extend({
+    createTile(){ const t = document.createElement("div"); t.style.background = "var(--land)"; t.style.border = "1px solid rgba(127,127,127,0.18)"; return t; }
+  });
+  return FlatTileLayer;
+}
+function makeOsm(){
+  /* Same-origin tile proxy: the browser never contacts OSM directly (which
+     blocks some Referers with "Access blocked" tiles); the app server makes
+     the real upstream request instead. */
+  return L.tileLayer("/tiles/osm/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19
+  }).on("tileerror", onTileError).on("tileload", onTileLoad);
+}
+function makeEsriDark(){
+  /* Proxied Esri Dark Gray Canvas — free dark basemap, NO API key,
+     Google-Maps-dark look. Same-origin URLs: browser asks our server, the
+     server fetches the real tiles (never blocked by Referer policies).
+     Stacked: base (ocean/land/canvas) + reference (city & place labels). */
+  const base = L.tileLayer("/tiles/esri/dark-base/{z}/{y}/{x}.png", {
+    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 19, maxNativeZoom: 16
+  }).on("tileerror", onTileError).on("tileload", onTileLoad);
+  const ref = L.tileLayer("/tiles/esri/dark-ref/{z}/{y}/{x}.png", {
+    maxZoom: 19, maxNativeZoom: 16
+  }).on("tileerror", () => {}).on("tileload", onTileLoad);
+  return L.layerGroup([base, ref]);
+}
+function onTileLoad(){ if(tileOnline !== true){ tileOnline = true; updateMapStatus(); } }
+function onTileError(e){
+  if(e.tile && e.tile.remove) e.tile.remove();
+  if(tileOnline === null){ tileOnline = false; updateMapStatus(); }
+}
+
+/* Resilient basemap: use the preferred provider, but if its tiles keep failing
+   (blocked by a proxy, offline, or provider outage) automatically swap to
+   OpenStreetMap so the map always renders instead of showing a dead area.
+   Returns the layerGroup that is (or will be) attached to the map. */
+function makeResilientBase(mapInst, prefer){
+  let primary = prefer === "esri" ? makeEsriDark() : makeOsm();
+  const group = L.layerGroup([primary]).addTo(mapInst);
+  let failures = 0, swapped = false;
+  primary.on("tileerror", () => {
+    if(swapped) return;
+    failures++;
+    if(failures >= 4 && prefer === "esri"){
+      swapped = true;
+      try{ group.removeLayer(primary); }catch(_){}
+      const fb = makeOsm();
+      group.addLayer(fb);
+      primary = fb;
+      failures = 0;
+      const st = document.getElementById("routeMapStatus") || document.getElementById("mapStatus") || document.getElementById("gpsMapStatus");
+      if(st){ st.style.display = "block"; st.textContent = "🗺 Basemap switched to OpenStreetMap (primary tiles unavailable)"; }
+      console.warn("Basemap auto-fallback: primary tiles failed, switched to OSM.");
+    }
+  });
+  return group;
+}
+
+/* ---- base / overlay layer management ---- */
+let switching = false;
+function switchBase(name, force){
+  if(!graphMap) return;
+  if(!force && name === currentBase) return;
+  switching = true;
+  Object.keys(BASE).forEach(k => { const l = BASE[k]; if(l && k !== "flat" && graphMap.hasLayer(l)) graphMap.removeLayer(l); });
+  if(BASE[name]) graphMap.addLayer(BASE[name]);
+  currentBase = name; switching = false;
+}
+function applyThemeBase(){
+  if(!graphMap) return;
+  /* Dark UI -> Esri dark basemap · Light UI -> OpenStreetMap light basemap. */
+  if(!baseManual) switchBase(isLight() ? "light" : "dark");
+  if(routeMapInst && ROV && ROV.base){
+    routeMapInst.removeLayer(ROV.base);
+    ROV.base = makeResilientBase(routeMapInst, isLight() ? "osm" : "esri");
+  }
+  gpsSwapBase();
+}
+
+/* ---- main map init ---- */
+function initGraphMap(){
+  if(graphMap) return;
+  if(typeof L === "undefined"){ $("mapStatus").textContent = "⚠ Leaflet failed to load — check /lib/leaflet.js"; return; }
+  canvasRenderer = L.canvas({ padding: 0.5 });
+  graphMap = L.map($("graphMap"), {
+    zoomControl: false, preferCanvas: true,
+    scrollWheelZoom: true, doubleClickZoom: true, touchZoom: true, dragging: true,
+    minZoom: 4, maxZoom: 18, worldCopyJump: false
+  });
+  const FT = flatTileLayer();
+  if(FT) BASE.flat = new FT();
+  BASE.light = makeOsm();
+  BASE.dark = makeEsriDark();
+  if(BASE.flat) graphMap.addLayer(BASE.flat);
+  switchBase(isLight() ? "light" : "dark", true);
+
+  OV.routes = L.layerGroup(); OV.stations = L.layerGroup(); OV.labels = L.layerGroup();
+  OV.cascade = L.layerGroup(); OV.risk = L.layerGroup(); OV.incident = L.layerGroup();
+  OV.selection = L.layerGroup(); OV.arrows = L.layerGroup();
+  [OV.routes, OV.stations, OV.labels, OV.cascade, OV.risk, OV.incident, OV.selection, OV.arrows]
+    .forEach(g => g.addTo(graphMap));
+
+  L.control.layers(
+    { "🗺 Light — OpenStreetMap": BASE.light, "🌙 Dark — Esri": BASE.dark },
+    { "Railway Stations": OV.stations, "Railway Routes": OV.routes, "Station Labels": OV.labels,
+      "Predicted Cascade Route": OV.cascade, "Risk Areas": OV.risk, "Incident Station": OV.incident },
+    { collapsed: true, position: "bottomleft" }
+  ).addTo(graphMap);
+
+  graphMap.on("baselayerchange", () => { if(!switching) baseManual = true; });
+  graphMap.on("zoomend", onViewChange);
+  graphMap.on("moveend", onViewChange);
+  window.addEventListener("resize", () => { if(graphMap) graphMap.invalidateSize(); });
+  document.addEventListener("fullscreenchange", () => { setTimeout(() => graphMap && graphMap.invalidateSize(), 60); });
+  fitNetwork();
+  setTimeout(() => graphMap.invalidateSize(), 150);
+}
+
+function networkBounds(){
+  const pts = GRAPH.nodes.map(n => [n.lat, n.lon]);
+  return L.latLngBounds(pts);
+}
+function fitNetwork(){ if(graphMap && GRAPH) graphMap.fitBounds(networkBounds(), {padding:[26,26]}); }
+function flyToStation(n, z){
+  if(!graphMap) return;
+  graphMap.flyTo([n.lat, n.lon], Math.max(graphMap.getZoom(), z || 9), {duration: 0.8});
+}
+function flyToNode(n){ flyToStation(n, 9); }
+
+/* ---- rebuild functions (only re-render on change) ---- */
+function rebuildRoutes(delays, risk, mode){
+  OV.routes.clearLayers();
+  GRAPH.edges.forEach(e => {
+    const a = NODE_BY_ID[e.source], b = NODE_BY_ID[e.target];
+    if(!a || !b) return;
+    // Google-Maps "road" style: dark casing underneath + lighter fill on top,
+    // width scales with segment distance.
+    const w = Math.min(4.6, Math.max(1.6, 1.1 + (e.km || 0) / 150));
+    let fill = cssVar("--roadfill") || "#9fb3c8";
+    if(mode === "delay") fill = statusHex(delayStatus(Math.max(delays[a.id]||0, delays[b.id]||0)));
+    else if(mode === "risk") fill = statusHex(delayStatus(Math.max(risk[a.id]||0, risk[b.id]||0)*100));
+    const casing = L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {
+      color: cssVar("--roadcase") || "#0a0f16", weight: w + 2.2, opacity: 0.9, lineCap: "round", renderer: canvasRenderer
+    });
+    casing.addTo(OV.routes);
+    const line = L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {
+      color: fill, weight: w, opacity: 0.92, lineCap: "round", renderer: canvasRenderer
+    });
+    line.bindPopup(edgePopup(e, delays));
+    line.on("mouseover", () => line.setStyle({weight: w + 1.2, opacity: 1}));
+    line.on("mouseout", () => line.setStyle({weight: w, opacity: 0.92}));
+    line.addTo(OV.routes);
+  });
+}
+function rebuildStations(delays, risk, mode, metric){
+  OV.stations.clearLayers();
+  const mvals = GRAPH.nodes.map(n => n[metric] || 0);
+  const mmax = Math.max(...mvals) || 1;
+  const step = (CURR.step !== undefined ? CURR.step : (CURR.hops ? 3 : 0));
+  const green = cssVar("--green") || "#00d050";
+  const critical = new Set([...GRAPH.nodes].sort((a,b)=>(b.betweenness_centrality||0)-(a.betweenness_centrality||0)).slice(0,8).map(n=>n.id));
+  GRAPH.nodes.forEach(n => {
+    const t = (n[metric]||0)/mmax;
+    const radius = 3.5 + 8*t;
+    let fill = statusHex("normal");
+    const hop = CURR.hops ? CURR.hops[n.id] : undefined;
+    const onRoute = CURR.route ? CURR.route.includes(n.id) : false;
+    if(n.id === CURR.source) fill = statusHex(delayStatus(CURR.delay||0));
+    else if(hop !== undefined && hop > 0 && hop <= step) fill = statusHex(delayStatus(CURR.impacts ? CURR.impacts[n.id] : 0));
+    else if(onRoute){ if(n.id === CURR.dest) fill = green; else fill = cssVar("--orange")||"#f08800"; }
+    else { if(mode === "delay") fill = statusHex(delayStatus(delays[n.id]||0)); else if(mode === "risk") fill = statusHex(delayStatus((risk[n.id]||0)*100)); }
+    // white-ringed map marker
+    const m = L.circleMarker([n.lat, n.lon], {
+      radius, fillColor: fill, color: "#ffffff", weight: 1.7, fillOpacity: 0.95, renderer: canvasRenderer
+    });
+    m.bindTooltip(stationTooltip(n, delays), {sticky:true, direction:"top", offset:[0, -radius-2]});
+    m.bindPopup(stationPopup(n, delays, risk));
+    m.on("click", () => selectNode(n.id));
+    m.addTo(OV.stations);
+    // green ring for critical hubs (choke points)
+    if(critical.has(n.id)){
+      L.circleMarker([n.lat, n.lon], {
+        radius: radius + 3.4, color: green, weight: 2, fill: false, opacity: 0.95, renderer: canvasRenderer
+      }).addTo(OV.stations);
+    }
+  });
+}
+function rebuildCascade(){
+  OV.cascade.clearLayers(); OV.risk.clearLayers(); OV.incident.clearLayers(); OV.arrows.clearLayers();
+  if(!CURR.hops) return;
+  const step = (CURR.step !== undefined ? CURR.step : 3);
+  const srcN = NODE_BY_ID[CURR.source];
+  if(srcN){
+    const col = statusHex(delayStatus(CURR.delay||0));
+    const ic = L.divIcon({className:"", html:`<div class="rl-incident" style="background:${col}"></div>`, iconSize:[26,26], iconAnchor:[13,13]});
+    L.marker([srcN.lat, srcN.lon], {icon: ic, interactive: false, keyboard: false}).addTo(OV.incident);
+  }
+  if(CURR.route && CURR.route.length > 1){
+    const pts = CURR.route.map(id => { const n = NODE_BY_ID[id]; return n ? [n.lat,n.lon] : null; }).filter(Boolean);
+    if(pts.length > 1){
+      L.polyline(pts, {color: cssVar("--orange")||"#f08800", weight: 4.5, opacity: 0.9, renderer: canvasRenderer}).addTo(OV.cascade);
+    }
+  }
+  Object.entries(CURR.hops).forEach(([id, h]) => {
+    if(h === 0 || h > step) return;
+    const n = NODE_BY_ID[id]; if(!n) return;
+    const impact = CURR.impacts ? CURR.impacts[id] : 10;
+    const col = statusHex(delayStatus(impact));
+    L.circle([n.lat, n.lon], {radius: impact*800 + 3500, color: col, weight: 1, fillColor: col, fillOpacity: 0.14, interactive: false, renderer: canvasRenderer}).addTo(OV.risk);
+    const parentId = (GRAPH.adj[id]||[]).find(p => CURR.hops[p] === h-1);
+    const parent = parentId ? NODE_BY_ID[parentId] : null;
+    if(parent){
+      L.polyline([[parent.lat,parent.lon],[n.lat,n.lon]], {color: col, weight: 4, opacity: 0.95, renderer: canvasRenderer}).addTo(OV.cascade);
+      const mid = [(parent.lat+n.lat)/2, (parent.lon+n.lon)/2];
+      const ang = bearing(parent, n);
+      const ac = L.divIcon({className:"", html:`<div class="rl-arrow" style="transform:rotate(${ang.toFixed(1)}deg); border-bottom-color:${col}"></div>`, iconSize:[14,14], iconAnchor:[7,7]});
+      L.marker(mid, {icon: ac, interactive: false, keyboard: false}).addTo(OV.arrows);
+    }
+  });
+}
+function bearing(a, b){
+  const toRad = Math.PI/180;
+  const y = Math.sin((b.lon-a.lon)*toRad) * Math.cos(b.lat*toRad);
+  const x = Math.cos(a.lat*toRad)*Math.sin(b.lat*toRad) - Math.sin(a.lat*toRad)*Math.cos(b.lat*toRad)*Math.cos((b.lon-a.lon)*toRad);
+  return (Math.atan2(y, x)/toRad + 360) % 360;
+}
+function rebuildLabels(){
+  if(!graphMap || !OV.labels) return;
+  OV.labels.clearLayers();
+  const z = graphMap.getZoom();
+  const bounds = graphMap.getBounds();
+  const majors = new Set([...GRAPH.nodes].sort((a,b)=>(b.betweenness_centrality||0)-(a.betweenness_centrality||0)).slice(0,14).map(n=>n.id));
+  let shown = 0, MAX = 70;
+  GRAPH.nodes.forEach(n => {
+    if(shown >= MAX) return;
+    const ll = L.latLng(n.lat, n.lon);
+    if(!bounds.contains(ll)) return;
+    let show = false;
+    if(z >= 11) show = true;
+    else if(z >= 9) show = majors.has(n.id) || (n.degree || 0) >= 4;
+    else if(z >= 7) show = majors.has(n.id);
+    if(show){
+      const ic = L.divIcon({className:"", html:`<span class="rl-label">${esc(n.id)}</span>`, iconSize:[0,0]});
+      L.marker(ll, {icon: ic, interactive: false, keyboard: false}).addTo(OV.labels);
+      shown++;
+    }
+  });
+}
+function onViewChange(){
+  if(labelTimer) cancelAnimationFrame(labelTimer);
+  labelTimer = requestAnimationFrame(rebuildLabels);
+}
+
+/* ---- popups / tooltips ---- */
+function stationTooltip(n, delays){
+  const d = delays[n.id] || 0;
+  const k = delayStatus(d);
+  return `<b>${esc(n.id)}</b> (${esc(n.code||"")})<br><span style="color:${statusHex(k)}">●</span> ${STATUS_META[k].label} · ~${d} min`;
+}
+function stationPopup(n, delays, risk){
+  const d = delays[n.id] || 0;
+  const k = delayStatus(d);
+  const r = risk ? risk[n.id] : 0;
+  const cdi = Math.round((d||0) * (1 + (n.eigenvector_centrality||0)*40) * (0.2 + (n.betweenness_centrality||0)));
+  const cong = gridCongestion(n.id);
+  const links = (GRAPH.adj[n.id]||[]).map(p => {
+    const e = EDGE_BY_KEY[edgeKey(n.id, p)];
+    return `${esc(p)} <span style="color:var(--mut)">· ${e ? e.km : "—"} km</span>`;
+  }).join("<br>");
+  return `<div class="map-popup"><h4>${esc(n.id)}<span class="pcode">${esc(n.code||"")}</span></h4>
+    <div class="prow"><span>Current delay</span><b>${d} min</b></div>
+    <div class="prow"><span>Risk level</span><b><span class="st-badge" style="background:${statusHex(k)}">${STATUS_META[k].label}</span></b></div>
+    <div class="prow"><span>Degree</span><b>${n.degree}</b></div>
+    <div class="prow"><span>Betweenness centrality</span><b>${(n.betweenness_centrality||0).toFixed(4)}</b></div>
+    <div class="prow"><span>PageRank</span><b>${(n.pagerank||0).toFixed(4)}</b></div>
+    <div class="prow"><span>Cascade delay index</span><b>${cdi}</b></div>
+    <div class="prow"><span>Grid congestion score</span><b>${cong.toFixed(0)} / 100</b></div>
+    <div class="plinks"><span>Connected stations</span><div>${links}</div></div></div>`;
+}
+function edgePopup(e, delays){
+  const k = delayStatus(Math.max(delays[e.source]||0, delays[e.target]||0));
+  return `<div class="map-popup"><h4>${esc(e.source)} → ${esc(e.target)}</h4>
+    <div class="prow"><span>Track segment</span><b>${e.km} km</b></div>
+    <div class="prow"><span>Status</span><b><span class="st-badge" style="background:${statusHex(k)}">${STATUS_META[k].label}</span></b></div></div>`;
+}
+
+/* ---- status chip ---- */
+function updateMapStatus(){
+  const el = $("mapStatus"); if(!el) return;
+  const mode = $("graphMode").value || "network";
+  if(CURR.source && CURR.hops){
+    const n = Object.keys(CURR.hops).length;
+    el.textContent = `⚠ Incident at ${CURR.source} — ${Math.round(CURR.delay||0)} min · ${Math.max(0, n-1)} downstream stations at risk`;
+  } else if(mode === "delay"){
+    el.textContent = "⏱ Live delay view — markers & lines coloured by current delay";
+  } else if(mode === "risk"){
+    el.textContent = "⚠ Cascading-risk view — red = stations most likely to propagate delays";
+  } else if(tileOnline === false){
+    el.textContent = "🗺 Railway network (map tiles offline) — scroll to zoom · drag to pan";
+  } else {
+    el.textContent = `🗺 ${GRAPH ? GRAPH.nodes.length : 0} stations · ${GRAPH ? GRAPH.edges.length : 0} track segments — scroll to zoom · drag to pan`;
+  }
+}
+
+/* ---- master refresh ---- */
+function applyVisual(){
+  if(!GRAPH || !graphMap) return;
+  const mode = $("graphMode").value || "network";
+  const metric = $("graphMetric").value || "degree";
+  const delays = computeDelays();
+  const risk = mode === "risk" ? computeRisk() : null;
+  rebuildRoutes(delays, risk, mode);
+  rebuildStations(delays, risk, mode, metric);
+  rebuildCascade();
+  rebuildLabels();
+  updateMapStatus();
+}
+function renderGraph(cascade){
+  if(!GRAPH) return;
+  if(cascade){ CURR.hops = cascade.hops; CURR.delay = cascade.delay; CURR.step = cascade.step; }
+  applyVisual();
+}
+
+/* ---- station selection ---- */
+function selectNode(id){
+  const n = NODE_BY_ID[id]; if(!n) return;
+  const d = computeDelays()[id] || 0;
+  const k = delayStatus(d);
+  const cong = gridCongestion(id);
+  $("graphInfo").style.display = "block";
+  $("graphInfoTitle").textContent = `${n.id} (${n.code||""})`;
+  $("graphInfoBody").innerHTML =
+    `<div class="gi-row"><span>Degree</span><b>${n.degree}</b></div>` +
+    `<div class="gi-row"><span>Degree centrality</span><b>${n.degree_centrality.toFixed(4)}</b></div>` +
+    `<div class="gi-row"><span>Eigenvector</span><b>${n.eigenvector_centrality.toExponential(2)}</b></div>` +
+    `<div class="gi-row"><span>PageRank</span><b>${n.pagerank.toFixed(4)}</b></div>` +
+    `<div class="gi-row"><span>Betweenness</span><b>${n.betweenness_centrality.toFixed(4)}</b></div>` +
+    `<div class="gi-row"><span>Closeness</span><b>${n.closeness_centrality.toFixed(4)}</b></div>` +
+    `<div class="gi-row"><span>Grid congestion</span><b>${cong.toFixed(0)} / 100</b></div>` +
+    `<div class="gi-row"><span>Status</span><b><span class="st-badge" style="background:${statusHex(k)}">${STATUS_META[k].label}</span></b></div>`;
+  setSelect($("fCurrent"), n.id);
+  setSelect($("graphSource"), n.id);
+  flyToStation(n, 10);
+  if(OV && OV.selection){
+    OV.selection.clearLayers();
+    L.circleMarker([n.lat, n.lon], {radius: 13, color: cssVar("--neon")||"#00e5ff", weight: 2.5, fill: false, dashArray: "4 3", renderer: canvasRenderer}).addTo(OV.selection);
+  }
+}
+
+/* ---- cascade animation + prediction bridge ---- */
+function renderCascadeList(hops, delay, step){
+  const rows = Object.entries(hops).filter(([,h]) => h > 0 && h <= step).map(([id, h]) => {
+    const impact = CURR.impacts ? CURR.impacts[id] : 0;
+    return {id, hop:h, impact};
+  }).sort((a,b) => b.impact - a.impact);
+  if(!rows.length){ $("cascadeList").innerHTML = ""; return; }
+  let h = `<div class="panel-box"><h3>CASCADE RIPPLES — t = ${step} hop${step===1?"":"s"}</h3>
+    <table><tr><th>STATION</th><th>HOP</th><th>STATUS</th><th>PROJECTED IMPACT</th></tr>`;
+  rows.forEach(r => {
+    const k = delayStatus(r.impact);
+    h += `<tr><td>${esc(r.id)}</td><td>${r.hop}</td>
+      <td><span class="st-badge" style="background:${statusHex(k)}">${STATUS_META[k].label}</span></td>
+      <td>~${r.impact.toFixed(1)} min</td></tr>`;
+  });
+  h += "</table></div>";
+  $("cascadeList").innerHTML = h;
+}
+function animateCascade(){
+  if(!GRAPH){ loadGraph().then(() => animateCascade()); return; }
+  if(!graphMap) initGraphMap();
+  const src = $("graphSource").value;
+  const delay = +$("graphDelay").value;
+  const hops = bfsHops(src);
+  CURR.source = src; CURR.delay = delay; CURR.hops = hops; CURR.step = 0; CURR.route = [];
+  CURR.impacts = {};
+  Object.entries(hops).forEach(([id, h]) => {
+    const n = NODE_BY_ID[id];
+    CURR.impacts[id] = h === 0 ? delay : Math.round(delay * Math.exp(-0.55*(h-1)) * (1 + (n ? n.eigenvector_centrality : 0)));
+  });
+  const sn = NODE_BY_ID[src];
+  if(sn) flyToStation(sn, 9);
+  [0,1,2,3].forEach(step => setTimeout(() => {
+    CURR.step = step;
+    applyVisual();
+    renderCascadeList(hops, delay, step);
+  }, step*650));
+}
+async function applyPredictionToMap(res, route, src){
+  try{
+    if(!GRAPH){ await getGraph(); }        // load the graph first — bfsHops needs GRAPH.adj
+    if(!src){ return; }
+    const a = res.alert || {};
+    const hopMap = bfsHops(src);
+    CURR.source = src;
+    CURR.dest = (route && route.length) ? route[route.length-1] : null;
+    CURR.route = route || [];
+    CURR.delay = (a.source_delay_min !== undefined && a.source_delay_min !== null)
+      ? +a.source_delay_min : +($("fDelay").value || 0);
+    CURR.pred = res.predicted_destination_arrival_delay_min || 0;
+    CURR.level = a.level || "LOW";
+    CURR.hops = hopMap;
+    CURR.step = 3;
+    CURR.impacts = {};
+    Object.entries(hopMap).forEach(([id, h]) => {
+      const n = NODE_BY_ID[id];
+      CURR.impacts[id] = h === 0 ? CURR.delay : Math.round(CURR.delay * Math.exp(-0.55*(h-1)) * (1 + (n ? n.eigenvector_centrality : 0)));
+    });
+    renderCascadeList(hopMap, CURR.delay, 3);
+    const sn = NODE_BY_ID[src];
+    if(!graphMap) initGraphMap();
+    applyVisual();
+    if(sn) flyToStation(sn, 9);
+  }catch(e){
+    console.warn("applyPredictionToMap:", e);
+  }
+}
+function clearIncident(){
+  CURR.source = null; CURR.dest = null; CURR.route = []; CURR.delay = 0; CURR.pred = 0;
+  CURR.hops = null; CURR.impacts = null; CURR.level = "NORMAL"; CURR.step = 0;
+  $("cascadeList").innerHTML = "";
+  if(OV && OV.selection) OV.selection.clearLayers();
+  applyVisual();
+}
+function toggleFullscreen(){
+  const el = $("graphMap");
+  if(!el) return;
+  if(document.fullscreenElement){ if(document.exitFullscreen) document.exitFullscreen(); }
+  else if(el.requestFullscreen) el.requestFullscreen();
+  else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+}
+
+/* ---- route map (prediction page) ---- */
+function initRouteMap(){
+  if(routeMapInst) return;
+  if(typeof L === "undefined"){ $("routeMap").innerHTML = '<p class="muted">Leaflet unavailable.</p>'; return; }
+  routeMapInst = L.map($("routeMap"), { zoomControl: false, preferCanvas: true, scrollWheelZoom: true, doubleClickZoom: true, touchZoom: true });
+  ROV.routes = L.layerGroup(); ROV.stations = L.layerGroup(); ROV.highlight = L.layerGroup(); ROV.labels = L.layerGroup();
+  ROV.routes.addTo(routeMapInst); ROV.stations.addTo(routeMapInst); ROV.highlight.addTo(routeMapInst); ROV.labels.addTo(routeMapInst);
+  routeMapInst.on("zoomend", rebuildRouteLabels);
+  window.addEventListener("resize", () => { if(routeMapInst) routeMapInst.invalidateSize(); });
+}
+async function drawRouteMap(route, src){
+  const G = await getGraph();
+  CURR.route = route || []; CURR.source = src || (route && route[0]) || null;
+  if(!routeMapInst) initRouteMap();
+  if(!routeMapInst) return;
+  if(!ROV.base){
+    ROV.base = makeResilientBase(routeMapInst, isLight() ? "osm" : "esri");
+  }
+  rebuildRouteMap(route);
+}
+function rebuildRouteMap(route){
+  const delays = computeDelays();
+  const routeEdges = edgeSetFromRoute(route);
+  const routeSet = new Set(route);
+  ROV.routes.clearLayers(); ROV.stations.clearLayers(); ROV.highlight.clearLayers();
+  GRAPH.edges.forEach(e => {
+    const a = NODE_BY_ID[e.source], b = NODE_BY_ID[e.target]; if(!a || !b) return;
+    const k = delayStatus(Math.max(delays[a.id]||0, delays[b.id]||0));
+    const w = Math.min(4.4, Math.max(1.5, 1.0 + (e.km || 0) / 150));
+    if(routeEdges.has(e.source+"|"+e.target)){
+      L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color:"rgba(0,0,0,0.4)", weight: w+4, lineCap:"round", renderer: canvasRenderer}).addTo(ROV.highlight);
+      L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color: statusHex(delayStatus(CURR.pred || CURR.delay || 0)), weight: w+2, lineCap:"round", renderer: canvasRenderer}).addTo(ROV.highlight);
+    } else {
+      L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color: cssVar("--roadcase")||"#0a0f16", weight: w+2, opacity:0.55, lineCap:"round", renderer: canvasRenderer}).addTo(ROV.routes);
+      L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color: statusHex(k), weight: w, opacity:0.55, lineCap:"round", renderer: canvasRenderer}).addTo(ROV.routes);
+    }
+  });
+  GRAPH.nodes.forEach(n => {
+    const r = routeSet.has(n.id) ? 7 : 4;
+    let fill = statusHex(delayStatus(delays[n.id]||0));
+    if(n.id === CURR.source) fill = statusHex(delayStatus(CURR.delay||0));
+    else if(n.id === CURR.dest) fill = cssVar("--green")||"#00d050";
+    else if(routeSet.has(n.id)) fill = cssVar("--orange")||"#f08800";
+    const m = L.circleMarker([n.lat,n.lon], {radius:r, fillColor:fill, color:"#ffffff", weight:1.7, fillOpacity:0.95, renderer: canvasRenderer});
+    m.bindPopup(stationPopup(n, delays, null));
+    m.addTo(ROV.stations);
+  });
+  fitRoute();
+  rebuildRouteLabels();
+}
+function rebuildRouteLabels(){
+  if(!routeMapInst || !ROV.labels) return;
+  ROV.labels.clearLayers();
+  (CURR.route||[]).forEach(id => {
+    const n = NODE_BY_ID[id]; if(!n) return;
+    const ic = L.divIcon({className:"", html:`<span class="rl-label">${esc(n.id)}</span>`, iconSize:[0,0]});
+    L.marker([n.lat,n.lon], {icon: ic, interactive: false, keyboard: false}).addTo(ROV.labels);
+  });
+}
+function fitRoute(){
+  const pts = (CURR.route||[]).map(id => { const n = NODE_BY_ID[id]; return n ? [n.lat,n.lon] : null; }).filter(Boolean);
+  if(!routeMapInst) return;
+  if(pts.length > 1) routeMapInst.fitBounds(L.latLngBounds(pts), {padding:[40,40]});
+  else if(pts.length === 1) routeMapInst.setView(pts[0], 11);
+}
+
+/* ---- graph loaders (entry points) ---- */
+async function getGraph(){
+  if(GRAPH) return GRAPH;
+  GRAPH = await api("/graph");
+  GRAPH.adj = {};
+  NODE_BY_ID = {}; EDGE_BY_KEY = {};
+  GRAPH.nodes.forEach(n => { GRAPH.adj[n.id] = []; NODE_BY_ID[n.id] = n; });
+  GRAPH.edges.forEach(e => {
+    GRAPH.adj[e.source].push(e.target); GRAPH.adj[e.target].push(e.source);
+    EDGE_BY_KEY[edgeKey(e.source, e.target)] = e;
+  });
+  $("graphSource").innerHTML = GRAPH.nodes.map(n => `<option>${esc(n.id)}</option>`).join("");
+  setSelect($("graphSource"), "Mysuru");
+  return GRAPH;
+}
+async function loadGraph(){
+  await getGraph();
+  initGraphMap();
+  applyVisual();
+}
+function posOf(id){ return NODE_BY_ID[id] || null; }
+
+/* ============ AUTH ============ */
+$("tabSignin").addEventListener("click", () => {
+  $("signinForm").style.display = "block"; $("registerForm").style.display = "none";
+  $("tabSignin").classList.add("active"); $("tabRegister").classList.remove("active");
+  $("authErr").textContent = ""; $("authOk").textContent = "";
+});
+$("tabRegister").addEventListener("click", () => {
+  $("signinForm").style.display = "none"; $("registerForm").style.display = "block";
+  $("tabRegister").classList.add("active"); $("tabSignin").classList.remove("active");
+  $("authErr").textContent = ""; $("authOk").textContent = "";
+});
+
+async function doLogin(){
+  $("authErr").textContent = ""; $("authOk").textContent = "";
+  try{
+    const res = await api("/login", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({username: $("user").value.trim(), password: $("pass").value.trim()})});
+    if(res.success){
+      FULL_NAME = res.full_name || "Dispatcher";
+      $("userName").textContent = FULL_NAME;
+      $("auth").style.display = "none";
+      $("app").style.display = "block";
+      await loadAll();
+    } else {
+      $("authErr").textContent = "⚠ ACCESS DENIED — invalid credentials";
+    }
+  }catch(e){ $("authErr").textContent = "⚠ Backend offline — start FastAPI first (python src/run.py)"; }
+}
+
+async function doRegister(){
+  $("authErr").textContent = ""; $("authOk").textContent = "";
+  const p1 = $("regPass").value, p2 = $("regPass2").value;
+  if(p1 !== p2){ $("authErr").textContent = "⚠ Passwords do not match"; return; }
+  if(!p1 || !$("regUser").value){ $("authErr").textContent = "⚠ Username and password are required"; return; }
+  const email = $("regEmail").value.trim();
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    $("authErr").textContent = "⚠ Enter a valid email address (e.g. name@railways.in)"; return;
+  }
+  const pwIssues = passwordIssues(p1);
+  if(pwIssues.length){
+    $("authErr").textContent = "⚠ Password needs " + pwIssues.join(", ") + "."; return;
+  }
+  try{
+    const res = await api("/register", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({full_name: $("regName").value, email: $("regEmail").value,
+        username: $("regUser").value.trim(), password: p1})});
+    if(res.success){
+      FULL_NAME = res.full_name || $("regUser").value;
+      $("authOk").textContent = "✅ Account created — switch to Sign In to continue";
+      $("regName").value = $("regEmail").value = $("regUser").value = $("regPass").value = $("regPass2").value = "";
+    } else {
+      $("authErr").textContent = "⚠ " + (res.message || "Registration failed");
+    }
+  }catch(e){ $("authErr").textContent = "⚠ Backend offline — start FastAPI first"; }
+}
+
+function doLogout(){
+  $("app").style.display = "none";
+  $("auth").style.display = "flex";
+  $("pass").value = "swr2026";
+}
+
+/* ============ LOADERS ============ */
+async function loadStations(){
+  const s = await api("/stations");
+  const names = s.stations;
+  const opts = n => [`<option value="">—</option>`].concat(names.map(x=>`<option>${x}</option>`)).join("");
+  $("fCurrent").innerHTML = names.map(x=>`<option>${x}</option>`).join("");
+  $("fDest").innerHTML = opts();
+  $("fUpcoming").innerHTML = opts();
+  $("gpsOrigin").innerHTML = names.map(x=>`<option>${x}</option>`).join("");
+  $("gpsDest").innerHTML = opts();
+  setSelect($("fCurrent"), "Mysuru");
+  setSelect($("fDest"), "KSR Bengaluru");
+  setSelect($("gpsOrigin"), "Mysuru");
+  setSelect($("gpsDest"), "KSR Bengaluru");
+}
+async function loadStatus(){
+  const o = await api("/system/overview");
+  const chip = (k, v, neon) => `<div class="chip"><div class="k">${k}</div><div class="v ${neon?'neon':''}">${v}</div></div>`;
+  $("statusChips").innerHTML =
+    chip("ACTIVE MODEL", o.model, true) +
+    chip("BEST SINGLE", `${o.best_single_model} · MAE ${o.best_mae} min`) +
+    chip("NETWORK", `${o.n_stations} stations · ${o.n_edges} edges`) +
+    chip("GRAPH FEATURES", `${o.n_features} flattened columns`) +
+    chip("TRAIN / TEST", `${o.n_train} / ${o.n_test} journeys`) +
+    chip("NETWORK VER", o.network_version || "—", true);
+  const ss = $("sysStatus");
+  if(ss){ ss.className = "sys-status on"; ss.innerHTML = "<span class=\"dot\"></span> System Online"; }
+}
+async function loadAblation(){
+  try{ $("ablationTable").innerHTML = csvToTable(await api("/static/ablation_results.csv")); }
+  catch(e){ $("ablationTable").innerHTML = "<p class='muted'>Run src/train.py to regenerate.</p>"; }
+}
+async function loadCentrality(){
+  const g = await api("/graph");
+  const rows = g.nodes.map(n => ({station:n.id, degree:n.degree, eigen:n.eigenvector_centrality.toExponential(2),
+    pagerank:n.pagerank.toFixed(4), between:n.betweenness_centrality.toFixed(4)}))
+    .sort((a,b) => b.between - a.between);
+  $("centralityTable").innerHTML = makeTable(rows, [
+    {key:"station",label:"STATION"},{key:"degree",label:"CONNECTIONS"},
+    {key:"eigen",label:"INFLUENCE"},{key:"pagerank",label:"IMPORTANCE"},{key:"between",label:"CHOKE-POINT SCORE"}]);
+  CENTRALITY_LOADED = true;
+}
+async function loadSettings(){
+  const o = await api("/system/overview");
+  $("settingsBody").innerHTML =
+    `<b>Active model:</b> ${esc(o.model)} (best single: ${esc(o.best_single_model)}, MAE ${o.best_mae} min)<br>` +
+    `<b>Network:</b> ${o.n_stations} stations · ${o.n_edges} edges · version ${esc(o.network_version)}<br>` +
+    `<b>Features:</b> ${o.n_features} flattened columns · target: ${esc(o.target)}<br>` +
+    `<b>Data:</b> ${o.n_train} train / ${o.n_test} test journeys`;
+}
+let MODELS = [];
+async function loadModels(){
+  try{
+    const r = await api("/models");
+    MODELS = (r && r.models) || [];
+    const active = (r && r.active) || null;
+    const opts = MODELS.map(m => {
+      const mae = (m.mae === null || m.mae === undefined) ? "" : ` — MAE ${Number(m.mae).toFixed(2)} min`;
+      const star = (m.name === active) ? " ★ active" : "";
+      return `<option value="${esc(m.name)}"${m.name === active ? " selected" : ""}>${esc(m.name)}${esc(mae)}${esc(star)}</option>`;
+    }).join("");
+    const n = MODELS.length;
+    ["fModel", "gpsModel"].forEach(id => {
+      const el = $(id);
+      if(el){ el.innerHTML = opts || `<option value="">No models loaded</option>`; }
+    });
+    const cnt = $("statModelsCount");
+    if(cnt) cnt.textContent = `${n} ML Model${n === 1 ? "" : "s"}`;
+    const lbl = $("fModelCount");
+    if(lbl) lbl.textContent = `(${n} trained)`;
+    const desc = $("statModelsDesc");
+    if(desc && active) desc.textContent = `${n} trained models — currently using ${active}. Switch any time.`;
+  }catch(e){ console.warn("loadModels:", e); }
+}
+
+async function loadAll(){
+  await Promise.all([loadStations(), loadStatus(), loadModels(), loadAblation(), refreshExports()]);
+}
+
+/* ============ PREDICTION ============ */
+async function predict(){
+  const tno = ($("fTrainNo").value || "").trim();
+  if(!tno){
+    $("alert").innerHTML = `<div class="alert critical"><h2 style="color:var(--red)">⚠ TRAIN NUMBER REQUIRED</h2><p>Please enter the train's number (e.g. <b>20807</b>) before running the prediction.</p></div>`;
+    $("fTrainNo").focus();
+    return;
+  }
+  $("alert").innerHTML = "<div class='panel-box'><h3>Running prediction…</h3></div>";
+  const payload = {
+    current_station: $("fCurrent").value,
+    upcoming_station: $("fUpcoming").value || null,
+    destination: $("fDest").value || null,
+    train_type: $("fType").value,
+    train_number: tno,
+    hour: +$("fHour").value, day: $("fDay").value,
+    weather: $("fWeather").value, current_delay_min: +$("fDelay").value,
+    model: ($("fModel").value || null)
+  };
+  try{
+    const res = await api("/predict/manual", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+    renderResult(res);
+  }catch(e){
+    $("alert").innerHTML = `<div class="alert critical"><h2 style="color:var(--red)">⚠ ERROR</h2><p>${esc(e.message)}</p></div>`;
+  }
+}
+function renderResult(res){
+  const a = res.alert || {};
+  const level = a.level || "LOW", color = levelVar(level);
+  const risk = a.at_risk_stations || [];
+  const rows = risk.slice(0,5).map(r => `<li>${esc(r.station)} — ~${r.projected_impact_min} min (hop ${r.hop})</li>`).join("")
+    || "<li>No downstream stations projected above threshold.</li>";
+  $("alert").innerHTML = `
+    <div class="alert ${level.toLowerCase()}">
+      <h2 style="color:${color};">⚠ GRID CASCADE ALERT — ${level} (${a.tag||"NOMINAL"})</h2>
+      <p><b>${(a.source_delay_min !== undefined && a.source_delay_min !== null) ? a.source_delay_min : 0}-min delay reported at ${esc(a.source||"?")}.</b><br>
+      Predicted <b>destination arrival delay: ${res.predicted_destination_arrival_delay_min} min</b>
+      (model: ${esc(res.model||"?")}).</p>
+      ${a.top_risk_station ? `<p>High probability of <b>20+ minute knock-on delays</b> converging at
+      <span style="color:${color};font-weight:700;">${esc(a.top_risk_station)}</span>
+      within the next 90 minutes.</p>` : ""}
+      <p style="margin-bottom:4px;">Projected ripple (top stations):</p><ul>${rows}</ul>
+    </div>`;
+
+  const route = res.route || [];
+  const km = res.route_km || 0;
+  const hrs = Math.floor(km/55), mins = Math.round((km/55 - hrs)*60);
+  const no = $("fTrainNo").value.trim();
+  $("routeDetails").innerHTML =
+    (no ? `Train <b>${esc(no)}</b> · ` : "") + `${esc($("fType").value)} · ${esc($("fDay").value)} ${$("fHour").value}:00 · ${esc($("fWeather").value)}<br>` +
+    `Route: <b>${esc(route.join(" → ") || "—")}</b><br>` +
+    `Distance: <b>${km} km</b> · Stops: <b>${Math.max(0, route.length-1)}</b> · ` +
+    `Est. duration: <b>~${hrs}h ${mins}m</b>`;
+  buildStationDelay(route, res.predicted_destination_arrival_delay_min, +$("fDelay").value);
+  applyPredictionToMap(res, route, $("fCurrent").value);
+  drawRouteMap(route, $("fCurrent").value);
+  const f = res.features_used || {};
+  $("featsOut").innerHTML = Object.entries(f).map(([k,v]) => `${esc(k)} = ${esc(v)}`).join("<br>");
+}
+function buildStationDelay(route, predDelay, currentDelay){
+  if(!route || !route.length){ $("stationDelay").innerHTML = "<span class='muted'>—</span>"; return; }
+  const rows = route.map((s, i) => {
+    const d = i === 0 ? currentDelay : Math.max(0, Math.round(predDelay * Math.exp(-0.45*(i-1))));
+    return {station:s, hop:i, delay:d};
+  });
+  $("stationDelay").innerHTML = makeTable(rows, [
+    {key:"station",label:"STATION"},{key:"hop",label:"HOP"},{key:"delay",label:"PROJECTED DELAY (min)"}]);
+}
+
+/* ============ BATCH (dataset / url / demo) ============ */
+function renderBatchTable(container, rows){
+  BATCH_ROWS = rows;
+  let h = "<table><tr><th>#</th><th>STATION</th><th>DESTINATION</th><th>TYPE</th><th>DELAY</th><th>PREDICTED</th><th>ALERT</th><th></th></tr>";
+  rows.forEach((r, i) => {
+    h += `<tr><td>${i+1}</td><td>${esc(r.current_station)}</td><td>${esc(r.destination||"—")}</td>
+      <td>${esc(r.train_type||"—")}</td><td>${r.current_delay_min ?? "—"} min</td>
+      <td><b>${r.predicted_arrival_delay_min ?? r.predicted_delay_min ?? "—"} min</b></td>
+      <td>${esc(r.alert_level||"—")}</td>
+      <td><button class="viewbtn" data-i="${i}">🔍 View Prediction</button></td></tr>`;
+  });
+  h += "</table>";
+  container.innerHTML = h;
+  container.querySelectorAll(".viewbtn").forEach(b => b.addEventListener("click", () => loadRowIntoPrediction(BATCH_ROWS[+b.dataset.i])));
+}
+function loadRowIntoPrediction(r){
+  if(!r) return;
+  setSelect($("fCurrent"), r.current_station);
+  setSelect($("fDest"), r.destination || "");
+  setSelect($("fUpcoming"), r.upcoming_station || "");
+  if(r.train_type) setSelect($("fType"), r.train_type);
+  if(r.weather) setSelect($("fWeather"), r.weather);
+  if(r.day) setSelect($("fDay"), r.day);
+  if(r.hour !== null && r.hour !== undefined){ $("fHour").value = +r.hour; $("hourVal").textContent = r.hour; }
+  if(r.current_delay_min !== null && r.current_delay_min !== undefined){ $("fDelay").value = +r.current_delay_min; $("delayVal").textContent = r.current_delay_min; }
+  $("fTrainNo").value = r.train_number || "";
+  showPage("prediction");
+  predict();
+}
+
+async function processDataset(){
+  const f = $("fileInput").files[0];
+  $("datasetMsg").textContent = ""; $("datasetTable").innerHTML = ""; $("exportLink").innerHTML = "";
+  if(!f){ $("datasetMsg").textContent = "Upload a CSV first."; return; }
+  $("datasetMsg").textContent = "Processing…";
+  const fd = new FormData(); fd.append("file", f);
+  try{
+    const res = await api("/predict/upload", {method:"POST", body: fd});
+    if(!res.rows || !res.rows.length){ $("datasetMsg").textContent = "No valid rows found."; return; }
+    renderBatchTable($("datasetTable"), res.rows);
+    $("datasetMsg").textContent = `Processed ${res.rows.length} rows — click "🔍 View Prediction" on any row for the full cascade analysis.`;
+    if(res.download){
+      $("exportLink").innerHTML = `<div class="panel-box"><h3>EXPORT</h3>
+        <a href="${res.download}" download>⬇ Download ${esc(res.export_id)}</a></div>`;
+    }
+  }catch(e){ $("datasetMsg").textContent = "Request failed: " + e.message; }
+}
+async function loadDemo(){
+  try{
+    const res = await api("/demo/records");
+    renderBatchTable($("demoTable"), res.records.map(r => ({
+      current_station: r.current_station, destination: r.destination, train_type: r.train_type,
+      train_number: r.train_number || "", hour: r.hour, day: r.day, weather: r.weather,
+      current_delay_min: r.current_delay_min, predicted_arrival_delay_min: r.predicted_delay_min,
+      alert_level: r.alert_level, upcoming_station: ""
+    })));
+  }catch(e){ $("demoTable").innerHTML = "<p class='muted'>Backend offline.</p>"; }
+}
+async function loadHistory(){
+  try{
+    const res = await api("/history");
+    const h = res.history || [];
+    if(!h.length){ $("historyTable").innerHTML = "<p class='muted'>No predictions yet — run one from the Prediction page.</p>"; return; }
+    $("historyTable").innerHTML = makeTable(h.map(r => ({
+      ts: r.timestamp, station: r.current_station, dest: r.destination, no: r.train_number||"—",
+      delay: r.current_delay_min, pred: r.predicted_delay_min, level: r.alert_level
+    })), [{key:"ts",label:"TIME"},{key:"station",label:"STATION"},{key:"dest",label:"DESTINATION"},
+          {key:"no",label:"TRAIN"},{key:"delay",label:"DELAY (min)"},{key:"pred",label:"PREDICTED (min)"},{key:"level",label:"ALERT"}]);
+  }catch(e){ $("historyTable").innerHTML = "<p class='muted'>Backend offline.</p>"; }
+}
+async function refreshExports(){
+  try{ await api("/exports"); }catch(e){}
+}
+
+
+/* ============ DISPATCHER COPILOT ============ */
+const COPILOT_CHIPS = [
+  "Mysuru delayed 45 min at 18:00 — which junctions choke first?",
+  "What's my best mitigation for a cascade at KSR Bengaluru?",
+  "Route from Chennai Central to Hubballi",
+  "Top 5 riskiest stations right now",
+  "Tell me about Guntakal",
+  "What if I hold Mysuru 20 extra minutes?",
+];
+function fmtChat(text){
+  const e2 = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const lines = e2(text).split("\n");
+  let h = "", inList = false;
+  lines.forEach(l => {
+    const b = l.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+    if(/^-\s+/.test(b)){
+      if(!inList){ h += "<ul>"; inList = true; }
+      h += "<li>" + b.replace(/^-\s+/, "") + "</li>";
+    } else {
+      if(inList){ h += "</ul>"; inList = false; }
+      h += b + "<br>";
+    }
+  });
+  if(inList) h += "</ul>";
+  return h;
+}
+function copilotAdd(role, html){
+  const d = document.createElement("div");
+  d.className = "msg msg-" + role;
+  d.innerHTML = html;
+  $("copilotLog").appendChild(d);
+  $("copilotLog").scrollTop = $("copilotLog").scrollHeight;
+  return d;
+}
+function renderCopilotChips(){
+  $("copilotChips").innerHTML = COPILOT_CHIPS.map(c => `<button>${esc(c)}</button>`).join("");
+  $("copilotChips").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    $("copilotInput").value = b.textContent; sendCopilot();
+  }));
+}
+function loadCopilotStatus(){
+  api("/copilot/status").then(s => {
+    $("copilotStatus").innerHTML = s.mode === "llm"
+      ? `<b style="color:var(--green);">● LLM agent active</b> (${esc(s.model)}) — model composes answers from live tool results.`
+      : `<b style="color:var(--neon);">● Offline agent active</b> — deterministic tool-calling. Set <span class="mono">COPILOT_LLM_KEY</span> to enable an LLM.`;
+  }).catch(() => { $("copilotStatus").textContent = "Copilot backend offline."; });
+}
+async function sendCopilot(){
+  const input = $("copilotInput");
+  const text = input.value.trim();
+  if(!text) return;
+  const fromVoice = copilotVoiceUsed;
+  copilotVoiceUsed = false;
+  input.value = "";
+  copilotAdd("user", fmtChat(text));
+  $("copilotTyping").style.display = "block";
+  try{
+    const res = await api("/copilot/chat", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({message: text})});
+    $("copilotTyping").style.display = "none";
+    lastBotReply = res.reply || "";
+    const tools = (res.tools_used || []).map(t => `<span>🔧 ${esc(t)}</span>`).join("");
+    const speakBtn = `<div class="maplink"><button class="copilot-speak">🔊 Hear reply</button></div>`;
+    const mapBtn = res.map_action ? `<div class="maplink"><button class="copilot-map">🗺 Show on map</button></div>` : "";
+    const node = copilotAdd("bot", fmtChat(res.reply) + (tools ? `<div class="tools">${tools}</div>` : "") + speakBtn + mapBtn);
+    const sb = node.querySelector(".copilot-speak");
+    if(sb) sb.addEventListener("click", () => speakText(lastBotReply));
+    if(res.map_action){
+      const mb = node.querySelector(".copilot-map");
+      if(mb) mb.addEventListener("click", () => applyMapAction(res.map_action));
+    }
+    if(fromVoice) speakText(lastBotReply);
+  }catch(e){
+    $("copilotTyping").style.display = "none";
+    copilotAdd("bot", fmtChat("⚠ Copilot unreachable — is the backend running? (" + e.message + ")"));
+  }
+}
+function applyMapAction(ma){
+  if(!ma) return;
+  showPage("graph");
+  const run = () => {
+    CURR.source = ma.source;
+    CURR.dest = (ma.route && ma.route.length) ? ma.route[ma.route.length-1] : null;
+    CURR.route = ma.route || []; CURR.delay = ma.delay || 0; CURR.pred = ma.pred || 0;
+    CURR.level = ma.level || "LOW";
+    CURR.hops = ma.source ? bfsHops(ma.source) : null;
+    CURR.step = 3;
+    if(CURR.hops){
+      CURR.impacts = {};
+      Object.entries(CURR.hops).forEach(([id, h]) => {
+        const n = NODE_BY_ID[id];
+        CURR.impacts[id] = h === 0 ? (CURR.delay||0) : Math.round((CURR.delay||0) * Math.exp(-0.55*(h-1)) * (1 + (n ? n.eigenvector_centrality : 0)));
+      });
+    }
+    applyVisual();
+    const sn = NODE_BY_ID[ma.source];
+    if(sn) flyToStation(sn, 9);
+  };
+  if(GRAPH){ run(); } else { getGraph().then(() => { initGraphMap(); run(); }); }
+}
+
+/* ============ LIVE TRAIN TRACKING (GPS) ============ */
+let gpsMap = null, GOV = {};
+let gpsTimer = null, gpsRunning = false, gpsWatch = null, gpsLivePos = null;
+let gpsRouteWaypoints = [], gpsRouteKm = 0, gpsTravelledKm = 0;
+const GPS_TICK_SECONDS = 5;
+
+function initGpsMap(){
+  if(gpsMap) return;
+  if(typeof L === "undefined"){ $("gpsMap").innerHTML = '<p class="muted">Leaflet unavailable.</p>'; return; }
+  gpsMap = L.map($("gpsMap"), { zoomControl:false, preferCanvas:true, scrollWheelZoom:true,
+    doubleClickZoom:true, touchZoom:true, dragging:true, minZoom:4, maxZoom:18 });
+  GOV.base = makeResilientBase(gpsMap, isLight() ? "osm" : "esri");
+  GOV.routes = L.layerGroup(); GOV.stations = L.layerGroup(); GOV.labels = L.layerGroup();
+  GOV.risk = L.layerGroup(); GOV.train = L.layerGroup();
+  [GOV.routes, GOV.stations, GOV.labels, GOV.risk, GOV.train].forEach(g => g.addTo(gpsMap));
+  gpsMap.on("zoomend", renderGpsLabels);
+  window.addEventListener("resize", () => { if(gpsMap) gpsMap.invalidateSize(); });
+  renderGpsBase();
+  if(GRAPH) gpsMap.fitBounds(networkBounds(), {padding:[26,26]});
+  setTimeout(() => gpsMap.invalidateSize(), 150);
+}
+function gpsSwapBase(){
+  if(!gpsMap) return;
+  if(GOV.base) gpsMap.removeLayer(GOV.base);
+  GOV.base = makeResilientBase(gpsMap, isLight() ? "osm" : "esri");
+}
+function renderGpsBase(){
+  if(!gpsMap || !GRAPH) return;
+  GOV.routes.clearLayers(); GOV.stations.clearLayers();
+  const cr = cssVar("--roadcase")||"#0a0f16", cf = cssVar("--roadfill")||"#9fb3c8";
+  GRAPH.edges.forEach(e => {
+    const a = NODE_BY_ID[e.source], b = NODE_BY_ID[e.target]; if(!a || !b) return;
+    const w = Math.min(4.6, Math.max(1.6, 1.1 + (e.km||0)/150));
+    L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color:cr, weight:w+2.2, opacity:0.9, lineCap:"round", renderer:canvasRenderer}).addTo(GOV.routes);
+    L.polyline([[a.lat,a.lon],[b.lat,b.lon]], {color:cf, weight:w, opacity:0.92, lineCap:"round", renderer:canvasRenderer}).addTo(GOV.routes);
+  });
+  const green = cssVar("--green")||"#00d050";
+  const critical = new Set([...GRAPH.nodes].sort((a,b)=>(b.betweenness_centrality||0)-(a.betweenness_centrality||0)).slice(0,8).map(n=>n.id));
+  GRAPH.nodes.forEach(n => {
+    const m = L.circleMarker([n.lat,n.lon], {radius:4.5, fillColor:statusHex("normal"), color:"#ffffff", weight:1.6, fillOpacity:0.95, renderer:canvasRenderer});
+    m.addTo(GOV.stations);
+    if(critical.has(n.id)) L.circleMarker([n.lat,n.lon], {radius:7.5, color:green, weight:2, fill:false, opacity:0.95, renderer:canvasRenderer}).addTo(GOV.stations);
+  });
+  renderGpsLabels();
+}
+function renderGpsLabels(){
+  if(!gpsMap || !GOV.labels) return;
+  GOV.labels.clearLayers();
+  const majors = new Set([...GRAPH.nodes].sort((a,b)=>(b.betweenness_centrality||0)-(a.betweenness_centrality||0)).slice(0,12).map(n=>n.id));
+  GRAPH.nodes.forEach(n => {
+    if(!majors.has(n.id)) return;
+    const ic = L.divIcon({className:"", html:`<span class="rl-label">${esc(n.id)}</span>`, iconSize:[0,0]});
+    L.marker([n.lat,n.lon], {icon:ic, interactive:false, keyboard:false}).addTo(GOV.labels);
+  });
+}
+function gpsMoveTrain(pos){
+  if(!gpsMap) return;
+  GOV.train.clearLayers();
+  const ic = L.divIcon({className:"", html:'<div class="gps-train">🚆</div>', iconSize:[30,30], iconAnchor:[15,15]});
+  const mk = L.marker([pos.lat, pos.lon], {icon:ic, zIndexOffset:1000, interactive:false, keyboard:false}).addTo(GOV.train);
+  gpsMap.panTo([pos.lat, pos.lon], {animate:true, duration:0.6});
+}
+function gpsRiskColor(impact){
+  if(impact >= 30) return cssVar("--red")||"#f02850";        // high / critical
+  if(impact >= 15) return cssVar("--s-minor")||"#f2c53d";    // medium
+  return cssVar("--green")||"#00d050";                       // low
+}
+function gpsUpdateRisk(res){
+  if(!gpsMap || !GRAPH) return;
+  GOV.risk.clearLayers();
+  const a = res.alert || {};
+  const src = res.nearest_station;
+  const impacts = {};
+  (a.at_risk_stations||[]).forEach(r => { impacts[r.station] = r.projected_impact_min; });
+  const srcD = (a.source_delay_min !== undefined && a.source_delay_min !== null) ? a.source_delay_min : (res.current_delay_min ?? 0);
+  const n = NODE_BY_ID[src];
+  if(n){
+    const col = gpsRiskColor(srcD);
+    L.circleMarker([n.lat,n.lon], {radius:13, color:col, weight:3, fill:false, opacity:0.95, renderer:canvasRenderer}).addTo(GOV.risk);
+  }
+  Object.entries(impacts).forEach(([id, impact]) => {
+    const m = NODE_BY_ID[id]; if(!m) return;
+    const col = gpsRiskColor(impact);
+    L.circleMarker([m.lat,m.lon], {radius:10, color:col, weight:2.5, fillColor:col, fillOpacity:0.22, renderer:canvasRenderer}).addTo(GOV.risk);
+  });
+}
+function gpsRenderResult(res){
+  const a = res.alert || {};
+  const level = a.level || "LOW", color = levelVar(level);
+  const dest = (res.route && res.route.length) ? res.route[res.route.length-1] : (res.destination || "—");
+  const rows = (a.at_risk_stations||[]).slice(0,6).map(r =>
+    `<li>${esc(r.station)} — ~${r.projected_impact_min} min (hop ${r.hop})</li>`).join("")
+    || "<li>No stations above threshold — all clear.</li>";
+  $("gpsPanel").innerHTML =
+    `<div class="gps-grid">
+      <div class="gps-stat"><span>TRAIN</span><b>${esc(res.train_number||"—")}</b></div>
+      <div class="gps-stat"><span>GPS POSITION</span><b>${(+res.gps.lat).toFixed(4)}, ${(+res.gps.lon).toFixed(4)}</b></div>
+      <div class="gps-stat"><span>NEAREST STATION</span><b>${esc(res.nearest_station)}</b></div>
+      <div class="gps-stat"><span>DISTANCE TO STATION</span><b>${res.distance_to_station_km} km</b></div>
+      <div class="gps-stat"><span>NEXT STATION</span><b>${esc(res.upcoming_station||"—")}</b></div>
+      <div class="gps-stat"><span>DESTINATION</span><b>${esc(dest)}</b></div>
+      <div class="gps-stat"><span>SPEED</span><b>${res.gps.speed_kmh} km/h</b></div>
+      <div class="gps-stat"><span>CURRENT DELAY</span><b>${(+res.current_delay_min).toFixed(0)} min</b></div>
+      <div class="gps-stat"><span>PREDICTED DEST. DELAY</span><b style="color:${color};">${res.predicted_destination_arrival_delay_min} min</b></div>
+      <div class="gps-stat"><span>CASCADE LEVEL</span><b style="color:${color};">${level} (${a.tag||"NOMINAL"})</b></div>
+      <div class="gps-stat"><span>ROUTE</span><b>${res.route_km} km</b></div>
+    </div>`;
+  $("gpsAlert").innerHTML =
+    `<div class="alert ${level.toLowerCase()}">
+      <h2 style="color:${color};">⚠ CASCADE ALERT — ${level} (${a.tag||"NOMINAL"})</h2>
+      <p><b>${(a.source_delay_min !== undefined ? a.source_delay_min : 0)}-min delay</b> at
+      <b>${esc(a.source||res.nearest_station)}</b> → predicted destination delay
+      <b>${res.predicted_destination_arrival_delay_min} min</b> (${esc(res.model||"?")}).</p>
+      <p style="margin-bottom:4px;">Affected stations:</p><ul>${rows}</ul>
+    </div>`;
+}
+function buildGpsWaypoints(route){
+  const wp = []; let km = 0;
+  route.forEach((id, i) => {
+    const n = NODE_BY_ID[id]; if(!n) return;
+    wp.push({lat:n.lat, lon:n.lon, km});
+    if(i < route.length-1){
+      const e = EDGE_BY_KEY[edgeKey(id, route[i+1])];
+      km += e ? e.km : 0;
+    }
+  });
+  gpsRouteKm = km;
+  return wp;
+}
+function interpolateAlong(wp, km){
+  if(!wp.length) return null;
+  km = Math.max(0, Math.min(km, gpsRouteKm || wp[wp.length-1].km));
+  for(let i=0;i<wp.length-1;i++){
+    const a = wp[i], b = wp[i+1];
+    if(km <= b.km || i === wp.length-2){
+      const seg = Math.max(0.0001, b.km - a.km);
+      const t = Math.max(0, Math.min(1, (km - a.km)/seg));
+      return {lat: a.lat + (b.lat-a.lat)*t, lon: a.lon + (b.lon-a.lon)*t};
+    }
+  }
+  return {lat: wp[wp.length-1].lat, lon: wp[wp.length-1].lon};
+}
+function gpsNextPosition(){
+  const mode = $("gpsMode").value;
+  if(mode === "live"){
+    if(!gpsLivePos){ $("gpsMapStatus").textContent = "📡 Waiting for GPS fix…"; return null; }
+    return {lat: gpsLivePos.lat, lon: gpsLivePos.lon};
+  }
+  if(!gpsRouteWaypoints.length) return null;
+  const speed = +($("gpsSpeed").value || 60);
+  gpsTravelledKm += speed * (GPS_TICK_SECONDS / 3600);
+  return interpolateAlong(gpsRouteWaypoints, gpsTravelledKm);
+}
+async function gpsTick(){
+  if(!gpsRunning) return;
+  const pos = gpsNextPosition();
+  if(!pos) return;
+  const payload = {
+    lat: +pos.lat.toFixed(5), lon: +pos.lon.toFixed(5),
+    speed_kmh: +($("gpsSpeed").value || 60),
+    train_number: $("gpsTrainNo").value.trim() || null,
+    destination: $("gpsDest").value || null,
+    train_type: $("gpsType").value,
+    day: $("gpsDay").value,
+    weather: $("gpsWeather").value,
+    current_delay_min: +($("gpsDelay").value || 0),
+    model: ($("gpsModel").value || null),
+  };
+  try{
+    const res = await api("/gps/predict", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+    gpsMoveTrain(pos);
+    gpsUpdateRisk(res);
+    gpsRenderResult(res);
+  }catch(e){
+    $("gpsMapStatus").textContent = "⚠ " + e.message;
+  }
+}
+function startLiveGps(){
+  if(!("geolocation" in navigator)){
+    $("gpsMapStatus").textContent = "⚠ Geolocation not supported here — switch to Demo GPS mode.";
+    return;
+  }
+  gpsWatch = navigator.geolocation.watchPosition(
+    p => { gpsLivePos = {lat:p.coords.latitude, lon:p.coords.longitude};
+           $("gpsMapStatus").textContent = "📡 LIVE GPS — tracking real device position"; },
+    err => { $("gpsMapStatus").textContent = "⚠ GPS unavailable (" + err.message + ") — switch to Demo GPS mode."; },
+    {enableHighAccuracy:true, maximumAge:3000, timeout:15000}
+  );
+}
+async function gpsStart(){
+  const gno = ($("gpsTrainNo").value || "").trim();
+  if(!gno){
+    $("gpsMapStatus").textContent = "⚠ Enter a train number before starting tracking.";
+    return;
+  }
+  if(!GRAPH){ await getGraph(); }
+  if(!gpsMap) initGpsMap();
+  const mode = $("gpsMode").value;
+  $("gpsDemoBanner").style.display = (mode === "demo") ? "block" : "none";
+  $("gpsPanel").innerHTML = ""; $("gpsAlert").innerHTML = "";
+  gpsTravelledKm = 0; gpsLivePos = null;
+  if(mode === "demo"){
+    const origin = $("gpsOrigin").value, dest = $("gpsDest").value;
+    if(!origin || !dest){ $("gpsMapStatus").textContent = "⚠ Choose an origin and destination."; return; }
+    $("gpsMapStatus").textContent = "🛰 Fetching route…";
+    try{
+      const r = await api(`/gps/route?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}`);
+      gpsRouteWaypoints = buildGpsWaypoints(r.route);
+      const o = gpsRouteWaypoints[0];
+      if(o) gpsMoveTrain({lat:o.lat, lon:o.lon});
+      $("gpsMapStatus").textContent = `🛰 DEMO GPS MODE — ${r.route.length} stations · ${r.km} km · update every ${GPS_TICK_SECONDS}s`;
+    }catch(e){ $("gpsMapStatus").textContent = "⚠ " + e.message; return; }
+  } else {
+    $("gpsMapStatus").textContent = "📡 Requesting GPS permission…";
+    startLiveGps();
+  }
+  gpsRunning = true;
+  if(gpsTimer) clearInterval(gpsTimer);
+  gpsTick();
+  gpsTimer = setInterval(gpsTick, GPS_TICK_SECONDS * 1000);
+}
+function gpsStop(){
+  gpsRunning = false;
+  if(gpsTimer){ clearInterval(gpsTimer); gpsTimer = null; }
+  if(gpsWatch){ try{ navigator.geolocation.clearWatch(gpsWatch); }catch(e){} gpsWatch = null; }
+  $("gpsMapStatus").textContent = "⏹ Tracking stopped";
+}
+
+/* ============ VOICE INPUT (Dispatcher Copilot) ============ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognizing = false, voiceRec = null;
+let copilotVoiceUsed = false;   // last question came from the mic -> speak the reply aloud
+let lastBotReply = "";          // last assistant answer (for the 🔊 button)
+
+function speakText(text){
+  if(!("speechSynthesis" in window) || !text) return false;
+  window.speechSynthesis.cancel();
+  const clean = String(text).replace(/\*\*/g, "").replace(/^[-•]\s*/gm, "").replace(/\n+/g, ". ");
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = "en-IN"; u.rate = 1;
+  window.speechSynthesis.speak(u);
+  return true;
+}
+function voiceErrorMsg(code){
+  const map = {
+    "not-allowed": "Microphone permission denied. Click the 🔒 / 🎤 icon in the address bar → allow the microphone → then tap the mic again. (Use Chrome/Edge over HTTPS.)",
+    "service-not-allowed": "The speech service was blocked. Allow microphone access in your browser and use Chrome/Edge over HTTPS.",
+    "no-speech": "Didn't catch any speech — tap the mic and try again.",
+    "audio-capture": "No microphone detected on this device.",
+    "network": "Speech service unreachable — it needs an internet connection.",
+    "aborted": "Listening cancelled.",
+    "language-not-supported": "Speech language not supported — try English (en-IN).",
+  };
+  return map[code] || ("Speech error: " + code);
+}
+function initVoice(){
+  if(!SR){ $("copilotVoiceStatus").textContent = "⚠ Voice input not supported in this browser — type your question instead (Chrome/Edge recommended)."; return; }
+  voiceRec = new SR();
+  voiceRec.lang = "en-IN";
+  voiceRec.interimResults = false;
+  voiceRec.maxAlternatives = 1;
+  voiceRec.onresult = e => {
+    recognizing = false;
+    $("copilotMic").textContent = "🎙";
+    const text = e.results[0][0].transcript;
+    $("copilotInput").value = text;
+    $("copilotVoiceStatus").textContent = "✅ Got it — asking the Copilot…";
+    copilotVoiceUsed = true;
+    sendCopilot();
+  };
+  voiceRec.onerror = e => { recognizing = false; $("copilotMic").textContent = "🎙";
+    $("copilotVoiceStatus").textContent = "⚠ " + voiceErrorMsg(e.error); };
+  voiceRec.onend = () => { recognizing = false; $("copilotMic").textContent = "🎙"; };
+}
+async function toggleCopilotVoice(){
+  if(!SR){ $("copilotVoiceStatus").textContent = "⚠ Voice input not supported in this browser — type your question instead (Chrome/Edge recommended)."; return; }
+  if(recognizing){ voiceRec.stop(); return; }
+  // Pre-flight: explicitly request the microphone. SpeechRecognition alone can
+  // fail with "not-allowed" without ever showing the permission prompt, so we
+  // trigger the prompt (and confirm access) with getUserMedia first.
+  try{
+    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+      const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+      stream.getTracks().forEach(t => { try{ t.stop(); }catch(_){} });
+    }
+  }catch(err){
+    $("copilotVoiceStatus").textContent = "⚠ " + voiceErrorMsg("not-allowed");
+    return;
+  }
+  if(!voiceRec) initVoice();
+  if(!voiceRec) return;
+  recognizing = true;
+  $("copilotMic").textContent = "🔴";
+  $("copilotVoiceStatus").textContent = "Listening — say e.g. “Mysuru delayed 45 min at 18:00 — which junctions choke first?”";
+  try{ voiceRec.start(); }
+  catch(e){ recognizing = false; $("copilotMic").textContent = "🎙";
+    $("copilotVoiceStatus").textContent = "⚠ " + voiceErrorMsg(e && e.error ? e.error : "service-not-allowed"); }
+}
+
+/* ============ REGISTER VALIDATION (password + email) ============ */
+function passwordIssues(p){
+  const issues = [];
+  if(p.length < 8) issues.push("8+ characters");
+  if(!/[A-Z]/.test(p)) issues.push("one uppercase letter");
+  if(!/[a-z]/.test(p)) issues.push("one lowercase letter");
+  if(!/\d/.test(p)) issues.push("one digit");
+  if(!/[^A-Za-z0-9]/.test(p)) issues.push("one special character");
+  return issues;
+}
+function updatePassHint(){
+  const p = $("regPass").value;
+  const el = $("passHint");
+  if(!el) return;
+  const issues = passwordIssues(p);
+  if(!p){ el.textContent = "8+ characters · uppercase · lowercase · digit · special character"; el.className = "pass-hint"; return; }
+  if(issues.length){ el.textContent = "Password needs " + issues.join(", ") + "."; el.className = "pass-hint bad"; }
+  else { el.textContent = "✓ Strong password"; el.className = "pass-hint ok"; }
+}
+
+/* ============ EVENTS ============ */
+buildNav();
+document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => showPage(b.dataset.go)));
+$("loginBtn").addEventListener("click", doLogin);
+$("regBtn").addEventListener("click", doRegister);
+$("pass").addEventListener("keydown", e => { if(e.key === "Enter") doLogin(); });
+$("logoutBtn").addEventListener("click", doLogout);
+$("runBtn").addEventListener("click", predict);
+$("procBtn").addEventListener("click", processDataset);
+$("demoBtn").addEventListener("click", loadDemo);
+$("histRefresh").addEventListener("click", loadHistory);
+$("fHour").addEventListener("input", e => $("hourVal").textContent = e.target.value);
+$("fDelay").addEventListener("input", e => $("delayVal").textContent = e.target.value);
+$("graphMetric").addEventListener("change", () => applyVisual());
+$("graphMode").addEventListener("change", () => applyVisual());
+$("graphDelay").addEventListener("input", e => $("gDelayVal").textContent = e.target.value);
+$("animateBtn").addEventListener("click", animateCascade);
+$("clearEvent").addEventListener("click", clearIncident);
+$("zoomIn").addEventListener("click", () => graphMap && graphMap.zoomIn());
+$("zoomOut").addEventListener("click", () => graphMap && graphMap.zoomOut());
+$("zoomReset").addEventListener("click", fitNetwork);
+$("fitSel").addEventListener("click", () => {
+  const s = $("fCurrent").value || $("graphSource").value;
+  const n = NODE_BY_ID[s];
+  if(n) flyToStation(n, 10); else fitNetwork();
+});
+$("fullscreenBtn").addEventListener("click", toggleFullscreen);
+$("routeZoomIn").addEventListener("click", () => routeMapInst && routeMapInst.zoomIn());
+$("routeZoomOut").addEventListener("click", () => routeMapInst && routeMapInst.zoomOut());
+$("routeFit").addEventListener("click", fitRoute);
+$("copilotSend").addEventListener("click", sendCopilot);
+$("copilotInput").addEventListener("keydown", e => { if(e.key === "Enter") sendCopilot(); });
+$("copilotMic").addEventListener("click", toggleCopilotVoice);
+$("gpsStart").addEventListener("click", gpsStart);
+$("gpsStop").addEventListener("click", gpsStop);
+$("gpsMode").addEventListener("change", () => {
+  if(gpsRunning) gpsStop();
+  $("gpsDemoBanner").style.display = $("gpsMode").value === "demo" ? "block" : "none";
+});
+$("gpsZoomIn").addEventListener("click", () => gpsMap && gpsMap.zoomIn());
+$("gpsZoomOut").addEventListener("click", () => gpsMap && gpsMap.zoomOut());
+$("gpsFit").addEventListener("click", () => { if(gpsMap && GRAPH) gpsMap.fitBounds(networkBounds(), {padding:[26,26]}); });
+$("regPass").addEventListener("input", updatePassHint);
+renderCopilotChips();
+loadCopilotStatus();
+copilotAdd("bot", fmtChat("Hello dispatcher 👋 — I'm your RailPulse Copilot. Ask me about delays, choke points, routes, mitigations or what-if scenarios, and I'll answer from the live network."));
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+.venv
+venv
+
+# Runtime artifacts (regenerated on boot)
+exports
+
+# Local zips / builds
+*.zip
+build
+dist
+
+# Editor / OS noise
+.DS_Store
+.vscode
+.idea
+
+# Node / frontend tooling (not used at runtime)
+node_modules
+.vite

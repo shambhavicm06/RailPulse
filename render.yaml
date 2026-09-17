@@ -1,0 +1,16 @@
+# Render Blueprint — deploys RailPulse as a free web service from a Dockerfile.
+# Usage: Render Dashboard → "New +" → "Blueprint" → select your GitHub repo.
+services:
+  - type: web
+    name: railpulse
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: SWR_USER
+        value: admin
+      - key: SWR_PASS
+        value: swr2026
+      - key: PYTHONUNBUFFERED
+        value: "1"
