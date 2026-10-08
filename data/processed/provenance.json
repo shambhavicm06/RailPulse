@@ -1,0 +1,14 @@
+{
+  "n_synthetic": 10000,
+  "n_observed": 0,
+  "sources": [
+    {
+      "name": "simulated delay field",
+      "rows": 10000
+    }
+  ],
+  "provenance": "synthetic",
+  "rows_total": 10000,
+  "features_csv": "features.csv",
+  "n_features": 31
+}

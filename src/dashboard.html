@@ -198,6 +198,34 @@ main{flex:1; min-width:0; padding:0 0 48px;}
   display:inline-flex; align-items:center; gap:8px; padding:7px 14px; border-radius:999px;
   background:var(--surface-2); border:1px solid var(--line); color:var(--mut); font-size:13px; font-weight:600;
 }
+/* Data-provenance badge — states plainly what the model was trained on. */
+.prov-badge{
+  display:inline-flex; align-items:center; gap:7px; padding:7px 13px; border-radius:999px;
+  background:var(--surface-2); border:1px solid var(--line); color:var(--mut);
+  font-size:12.5px; font-weight:600; white-space:nowrap;
+}
+.prov-badge.warn{border-color:rgba(230,150,0,.5); color:var(--orange); background:rgba(230,150,0,.09);}
+.prov-badge.ok{border-color:rgba(27,158,87,.45); color:var(--green); background:rgba(27,158,87,.09);}
+.prov-badge .muted{opacity:.85; font-weight:500;}
+
+/* Prediction uncertainty band + risk chips */
+.uncwrap{margin-top:12px; padding:12px 14px; border-radius:12px;
+  background:var(--surface-2); border:1px solid var(--line);}
+.uncwrap h4{margin:0 0 9px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--mut);}
+.uncband{position:relative; height:26px; border-radius:8px; background:linear-gradient(90deg,
+  rgba(30,136,229,.16), rgba(30,136,229,.30)); border:1px solid rgba(30,136,229,.4);}
+.uncband .mid{position:absolute; top:-3px; bottom:-3px; width:3px; border-radius:2px;
+  background:var(--neon); box-shadow:0 0 10px rgba(0,0,0,.25);}
+.uncscale{display:flex; justify-content:space-between; font-size:11px; color:var(--mut); margin-top:5px;}
+.riskchips{display:flex; gap:8px; flex-wrap:wrap; margin-top:11px;}
+.riskchip{display:flex; flex-direction:column; gap:2px; padding:8px 12px; border-radius:10px;
+  background:var(--surface); border:1px solid var(--line); min-width:104px;}
+.riskchip b{font-size:16px;}
+.riskchip span{font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--mut);}
+.riskchip.hot{border-color:rgba(215,38,61,.45);} .riskchip.hot b{color:var(--red);}
+.riskchip.mid{border-color:rgba(230,150,0,.45);} .riskchip.mid b{color:var(--orange);}
+.riskchip.cool{border-color:rgba(27,158,87,.4);} .riskchip.cool b{color:var(--green);}
+
 .sys-status .dot{width:9px; height:9px; border-radius:50%; background:var(--orange); flex:none;}
 .sys-status.on .dot{background:var(--green); box-shadow:0 0 0 3px rgba(27,158,87,.18);}
 .sys-status.on{color:var(--green); border-color:rgba(27,158,87,.35);}
@@ -696,6 +724,9 @@ a.leaflet-popup-close-button{ color:var(--mut) !important; }
             <div class="sub" id="pageSub">Graph-Derived Feature Boosting · Network-Aware Delay Prediction</div>
           </div>
           <div class="topbar-right">
+            <span class="prov-badge" id="provenanceBadge" title="Data provenance">
+              <span>🧪</span> <b>Loading provenance…</b>
+            </span>
             <span class="sys-status" id="sysStatus"><span class="dot"></span>Connecting…</span>
           </div>
         </div>
@@ -1040,8 +1071,77 @@ a.leaflet-popup-close-button{ color:var(--mut) !important; }
 "use strict";
 const $ = id => document.getElementById(id);
 
+/* ---------------------------------------------------------------------------
+   Authenticated API client.
+
+   Every request carries the signed session token obtained from /login. A 401
+   means the token is missing or expired: the dashboard drops back to the sign-in
+   screen instead of showing a half-working page. This is the *client* half of
+   the security model — the server enforces the same rules regardless of what
+   the browser does, so hiding the UI is now defence in depth, not the defence.
+   --------------------------------------------------------------------------- */
+const AUTH = {
+  key: "railpulse_token",
+  // The token lives in memory first: WebViews, private windows and
+  // storage-restricted iframes can throw on sessionStorage access, and silently
+  // swallowing that made login *look* successful while every subsequent request
+  // went out unauthenticated (401 everywhere). Storage is now a best-effort
+  // extra so a reload can restore the session, never the only copy.
+  token: "",
+  get(){ return AUTH.token; },
+  set(t){
+    AUTH.token = t || "";
+    try{ sessionStorage.setItem(AUTH.key, AUTH.token); }catch(e){ /* storage unavailable */ }
+  },
+  clear(){
+    AUTH.token = "";
+    try{ sessionStorage.removeItem(AUTH.key); }catch(e){ /* storage unavailable */ }
+  },
+  restore(){
+    try{ AUTH.token = sessionStorage.getItem(AUTH.key) || ""; }catch(e){ AUTH.token = ""; }
+    return AUTH.token;
+  }
+};
+let FULL_NAME = "";
+let PRINCIPAL = null;
+
+function handleUnauthorised(detail){
+  // A "session expired" banner is unhelpful when the real cause is that the
+  // credential never reached the server. Report what actually happened, and leave
+  // a diagnostic trail the operator can quote.
+  const hadToken = !!AUTH.get();
+  AUTH.clear();
+  PRINCIPAL = null;
+  $("app").style.display = "none";
+  $("auth").style.display = "flex";
+  const err = $("authErr");
+  if(err){
+    err.textContent = "⚠ " + (detail || "Session expired — please sign in again.")
+      + (hadToken
+         ? " (a session token was present but was rejected; try a hard refresh: Ctrl+Shift+R)"
+         : " (no session token was stored in this browser — sign in again)");
+  }
+  try{ console.warn("[railpulse] unauthorised", {detail, hadToken}); }catch(e){}
+}
+
 async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers || {});
+  // "include" rather than "same-origin": an embedded frame can present an opaque
+  // origin, which makes the browser treat even a same-host call as cross-origin
+  // and silently drop the cookie.
+  opts.credentials = "include";
+  const token = AUTH.get();
+  if(token) opts.headers["Authorization"] = "Bearer " + token;
   const r = await fetch(path, opts);
+  if(r.status === 401 || r.status === 403){
+    let detail = "";
+    try{ detail = (await r.clone().json()).detail || ""; }catch(e){}
+    if(path !== "/login"){ handleUnauthorised(detail); }
+    const err = new Error(r.status === 403 ? "FORBIDDEN" : "UNAUTHORISED");
+    err.detail = detail; err.status = r.status;
+    throw err;
+  }
   if(!r.ok){ throw new Error("HTTP " + r.status); }
   const ct = r.headers.get("content-type") || "";
   return ct.includes("json") ? r.json() : r.text();
@@ -1069,7 +1169,6 @@ function csvToTable(csv){
 /* Declared up front: applyTheme() runs at startup and must not hit the
    temporal dead zone of these `let` bindings. */
 let GRAPH = null;
-let FULL_NAME = "Dispatcher";
 let CENTRALITY_LOADED = false;
 let BATCH_ROWS = [];
 let CURR = {source:null, dest:null, route:[], delay:0, pred:0, level:"NORMAL", hops:null, impacts:null, step:3};
@@ -1762,15 +1861,85 @@ async function doLogin(){
     const res = await api("/login", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({username: $("user").value.trim(), password: $("pass").value.trim()})});
     if(res.success){
+      if(!res.token){
+        // Never proceed "signed in" without a token: every later call would 401.
+        $("authErr").textContent = "⚠ Sign-in succeeded but the server returned no token — "
+          + "this deployment is misconfigured.";
+        return;
+      }
+      AUTH.set(res.token);
       FULL_NAME = res.full_name || "Dispatcher";
-      $("userName").textContent = FULL_NAME;
+      PRINCIPAL = {username: res.username, role: res.role || "dispatcher"};
+      $("userName").textContent = FULL_NAME + (res.role ? ` · ${res.role}` : "");
       $("auth").style.display = "none";
       $("app").style.display = "block";
       await loadAll();
+      refreshProvenanceBadge();
     } else {
-      $("authErr").textContent = "⚠ ACCESS DENIED — invalid credentials";
+      $("authErr").textContent = "⚠ ACCESS DENIED — " + (res.message || "invalid credentials");
     }
-  }catch(e){ $("authErr").textContent = "⚠ Backend offline — start FastAPI first (python src/run.py)"; }
+  }catch(e){
+    $("authErr").textContent = (e.message === "UNAUTHORISED" || e.message === "FORBIDDEN")
+      ? "⚠ ACCESS DENIED — " + (e.detail || "invalid credentials")
+      : "⚠ Backend offline — start FastAPI first (python src/run.py)";
+  }
+}
+
+/* Restore an existing session on reload: the token is validated by the server
+   (/auth/me), never trusted by the client. */
+async function restoreSession(){
+  // The in-memory copy is empty on a fresh page load; try the best-effort
+  // sessionStorage copy before giving up on restoring the session.
+  if(!AUTH.get() && !AUTH.restore()) return false;
+  try{
+    const me = await api("/auth/me");
+    PRINCIPAL = me;
+    FULL_NAME = me.full_name || me.username;
+    $("userName").textContent = FULL_NAME + (me.role ? ` · ${me.role}` : "");
+    $("auth").style.display = "none";
+    $("app").style.display = "block";
+    await loadAll();
+    refreshProvenanceBadge();
+    return true;
+  }catch(e){
+    handleUnauthorised();
+    return false;
+  }
+}
+
+async function doLogout(){
+  try{ await api("/auth/logout", {method:"POST"}); }catch(e){}
+  AUTH.clear(); PRINCIPAL = null;
+  handleUnauthorised();
+  $("authErr").textContent = "";
+}
+
+/* ---------------------------------------------------------------------------
+   Data-provenance badge.
+
+   The model is trained on simulated traffic, and any reviewer deserves to see
+   that stated plainly next to the metrics rather than buried in a README. When
+   real observations are ingested the badge changes automatically.
+   --------------------------------------------------------------------------- */
+const PROVENANCE_META = {
+  "synthetic":     {icon:"🧪", label:"Simulated data", tone:"warn"},
+  "synthetic+real":{icon:"🧪➕📡", label:"Simulated + observed", tone:"warn"},
+  "real":          {icon:"📡", label:"Observed data", tone:"ok"}
+};
+async function refreshProvenanceBadge(){
+  const el = $("provenanceBadge");
+  if(!el) return;
+  try{
+    const ov = await api("/system/overview");
+    const meta = PROVENANCE_META[ov.provenance] || PROVENANCE_META.synthetic;
+    const unc = ov.uncertainty || {};
+    const cov = unc.test_coverage && unc.test_coverage["0.9"];
+    el.className = "prov-badge " + meta.tone;
+    el.title = (ov.provenance_label || "") +
+      (cov ? ` · 90% interval empirical coverage: ${(cov*100).toFixed(1)}%` : "");
+    el.innerHTML = `<span>${meta.icon}</span> <b>${meta.label}</b>` +
+      (cov ? ` <span class="muted">· 90% band covers ${(cov*100).toFixed(0)}%</span>` : "");
+  }catch(e){ el.style.display = "none"; }
 }
 
 async function doRegister(){
@@ -1911,6 +2080,54 @@ async function predict(){
     $("alert").innerHTML = `<div class="alert critical"><h2 style="color:var(--red)">⚠ ERROR</h2><p>${esc(e.message)}</p></div>`;
   }
 }
+/* ---------------------------------------------------------------------------
+   Uncertainty panel.
+
+   A point estimate cannot answer "will it miss the connection?" — that is a
+   threshold question. The band is a conformally calibrated interval (nominal
+   coverage is a finite-sample guarantee on a held-out split), and the chips are
+   exceedance probabilities derived by inverting the predicted quantile function.
+   --------------------------------------------------------------------------- */
+function riskClass(p){
+  if(p >= 0.66) return "hot";
+  if(p >= 0.33) return "mid";
+  return "cool";
+}
+function renderUncertainty(u, point){
+  if(!u || !u.available) return "";
+  const bands = u.intervals || {};
+  const b90 = bands["90"] || bands["80"] || bands["50"];
+  if(!b90) return "";
+  const lo = b90.lower, hi = b90.upper;
+  const span = Math.max(1, hi);
+  const midPct = Math.max(0, Math.min(100, (point - lo) / Math.max(1, hi - lo) * 100));
+  const chips = Object.entries(u.exceedance || {}).map(([key, p]) => {
+    const mins = key.replace(/[^0-9]/g, "");
+    return `<div class="riskchip ${riskClass(p)}">
+      <span>&gt; ${mins} min late</span><b>${(p*100).toFixed(0)}%</b></div>`;
+  }).join("");
+  return `
+    <div class="uncwrap">
+      <h4>Uncertainty — ${esc(u.method || "conformal")} · ${esc(Object.keys(bands).sort((a,b)=>b-a)[0] || "90")}% band</h4>
+      <div class="uncband" style="margin-left:0;">
+        <div class="mid" style="left:calc(${midPct}% - 1.5px);"></div>
+      </div>
+      <div class="uncscale">
+        <span>${lo} min</span>
+        <span><b>${point} min</b> (point estimate)</span>
+        <span>${hi} min</span>
+      </div>
+      ${chips ? `<div class="riskchips">${chips}</div>` : ""}
+      ${u.saturation_note ? `<div class="uncscale" style="margin-top:8px;">
+        <span>ⓘ ${esc(u.saturation_note)}</span></div>` : ""}
+      ${(u.consistency && !u.consistency.point_inside_model_band) ? `<div class="uncscale" style="margin-top:6px;">
+        <span>ⓘ ${esc(u.consistency.note)}</span></div>` : ""}
+      <div class="uncscale" style="margin-top:8px;">
+        <span>${esc(u.coverage_note || "")}</span>
+      </div>
+    </div>`;
+}
+
 function renderResult(res){
   const a = res.alert || {};
   const level = a.level || "LOW", color = levelVar(level);
@@ -1927,7 +2144,8 @@ function renderResult(res){
       <span style="color:${color};font-weight:700;">${esc(a.top_risk_station)}</span>
       within the next 90 minutes.</p>` : ""}
       <p style="margin-bottom:4px;">Projected ripple (top stations):</p><ul>${rows}</ul>
-    </div>`;
+    </div>
+    ${renderUncertainty(res.uncertainty, res.predicted_destination_arrival_delay_min)}`;
 
   const route = res.route || [];
   const km = res.route_km || 0;
@@ -2494,6 +2712,24 @@ $("regPass").addEventListener("input", updatePassHint);
 renderCopilotChips();
 loadCopilotStatus();
 copilotAdd("bot", fmtChat("Hello dispatcher 👋 — I'm your RailPulse Copilot. Ask me about delays, choke points, routes, mitigations or what-if scenarios, and I'll answer from the live network."));
+
+/* Boot: reuse an existing session if the server still accepts its token,
+   otherwise show the sign-in screen. The server is the authority on validity —
+   the stored token is only a claim until /auth/me confirms it. */
+(async function boot(){
+  const restored = await restoreSession();
+  if(!restored){
+    $("app").style.display = "none";
+    $("auth").style.display = "flex";
+    try{
+      const cfg = await api("/auth/config");
+      if(cfg && cfg.default_demo_account_active){
+        const hint = $("demoHint");
+        if(hint) hint.style.display = "block";
+      }
+    }catch(e){ /* backend not up yet — the sign-in screen still works */ }
+  }
+})();
 </script>
 </body>
 </html>

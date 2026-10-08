@@ -17,26 +17,76 @@ from typing import Optional
 
 import pandas as pd
 import requests as _tile_requests
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from config import AUTH_PASS, AUTH_USER, DATA_DIR, EXPORTS_DIR, RESULTS_DIR, ROOT
+from audit import AuditMiddleware, log_event, recent as audit_recent
+from audit import summary as audit_summary
+from auth import (ROLES, Principal, auth_status, authenticate, hash_password,
+                  issue_token, require_admin, require_controller, require_dispatcher,
+                  require_viewer, throttle, users)
+from auth import SESSION_COOKIE, TOKEN_TTL_SECONDS
+from config import (ALLOW_SELF_REGISTRATION, ALLOWED_ORIGINS, AUTH_PASS, AUTH_USER,
+                    DATA_DIR, EXPORTS_DIR, PROVENANCE_LABELS, RESULTS_DIR, ROOT)
 from graph_utils import path_distance_km, shortest_path_km
 from inference import CascadePredictor
+from station_codes import station_code as _station_code
 
 app = FastAPI(
     title="SWR Cascade Delay API",
     description="Graph-Derived Feature Boosting for Cascading Train Delay Prediction",
-    version="1.0.0",
+    version="2.0.0",
 )
 
+# CORS is now an explicit allow-list (was "*"). The dashboard is served from the
+# same origin, so cross-origin access is only needed for separately hosted
+# clients, which must be named in SWR_ALLOWED_ORIGINS.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
 )
+app.add_middleware(AuditMiddleware)
+
+
+@app.middleware("http")
+async def same_origin_cors(request: Request, call_next):
+    """Permit credentialed requests that come from this deployment's own origin.
+
+    Sandboxed previews and reverse proxies commonly serve the dashboard from a
+    hostname the app cannot know in advance (and an embedded frame can present an
+    opaque origin, which makes the browser treat its own API calls as
+    cross-origin). The explicit allow-list cannot cover an address that is not
+    known at build time, so this middleware reflects the request origin **only
+    when its host equals the host the request was addressed to** — a cross-site
+    page can never match that, so it grants nothing to a foreign origin.
+    """
+    origin = request.headers.get("origin", "")
+    host = request.headers.get("host", "")
+    same_host = bool(origin) and bool(host) and origin.split("://")[-1] == host
+    if same_host and request.method == "OPTIONS":
+        return Response(
+            status_code=204,
+            headers={
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": request.headers.get(
+                    "access-control-request-headers", "*"),
+                "Access-Control-Max-Age": "600",
+                "Vary": "Origin",
+            },
+        )
+    response = await call_next(request)
+    if same_host:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers.append("Vary", "Origin")
+    return response
 
 # Static assets (figures, result tables, sample CSV) for the dashboard.
 app.mount("/static", StaticFiles(directory=str(RESULTS_DIR)), name="static")
@@ -132,57 +182,6 @@ def tile_esri_dark_ref(z: int, y: int, x: int):
         ], z, x, y)
 
 
-def _station_code(name: str, used: set[str]) -> str:
-    """Return a unique station code — real IR code where known, else derived."""
-    # Real Indian Railways station codes for well-known stations.
-    REAL_CODES = {
-        "KSR Bengaluru": "SBC", "Bengaluru Cantonment": "BNC", "Yesvantpur": "YPR",
-        "Krishnarajapuram": "KJM", "Whitefield": "WFD", "Yelahanka": "YNK",
-        "Kengeri": "KGI", "Bidadi": "BID", "Ramanagara": "RMGM", "Channapatna": "CPT",
-        "Maddur": "MAD", "Mandya": "MYA", "Srirangapatna": "S", "Mysuru": "MYS",
-        "Nanjangud": "NTW", "Chamarajanagar": "CMNR", "Krishnarajanagara": "KRNR",
-        "Hassan": "HAS", "Sakleshpur": "SKLR", "Arsikere": "ASK", "Tumakuru": "TK",
-        "Tiptur": "TTR", "Birur": "RRB", "Davangere": "DVG", "Harihar": "HRR",
-        "Haveri": "HVR", "Hubballi": "UBL", "Dharwad": "DWR", "Belagavi": "BGM",
-        "Gadag": "GDG", "Hosapete": "HPT", "Ballari": "BAY", "Hosur": "HSRA",
-        "Kolar": "KQZ", "Bangarapet": "BWT", "Malur": "MLO", "Chitradurga": "CTA",
-        "Chennai Central": "MAS", "Renigunta": "RU", "Tirupati": "TPTY",
-        "Vijayawada": "BZA", "Visakhapatnam": "VSKP", "Secunderabad": "SC",
-        "Warangal": "WL", "Guntakal": "GTL", "Raichur": "RC", "Kalaburagi": "KLBG",
-        "Solapur": "SUR", "Nagpur": "NGP", "Bhopal": "BPL", "Agra Cantt": "AGC",
-        "Hazrat Nizamuddin": "NZM", "Jaipur": "JP", "Ahmedabad": "ADI",
-        "Mumbai CSMT": "CSMT", "Pune": "PUNE", "Coimbatore": "CBE", "Erode": "ED",
-        "Salem": "SA", "Tiruchirappalli": "TPJ", "Madurai": "MDU",
-        "Thiruvananthapuram": "TVC", "Ernakulam": "ERS", "Kozhikode": "CLT",
-        "Mangaluru Central": "MAQ", "Palakkad": "PGT", "Aurangabad": "AWB",
-    }
-    if name in REAL_CODES:
-        code = REAL_CODES[name]
-        base = code
-        n = 1
-        while code in used:
-            n += 1
-            code = f"{base}{n}"
-        used.add(code)
-        return code
-    words = [w for w in re.split(r"[^A-Za-z0-9]+", name) if w]
-    if not words:
-        return name[:4].upper()
-    # Prefer initials of meaningful words (skip tiny stopwords).
-    stop = {"of", "the", "and", "jr", "jn", "road", "cantt", "central", "junction", "city", "town"}
-    initials = [w[0].upper() for w in words if w.lower() not in stop]
-    if len(initials) >= 2:
-        code = "".join(initials)[:4]
-    else:
-        code = words[0][:4].upper()
-    base = code
-    n = 1
-    while code in used:
-        n += 1
-        code = f"{base[:3]}{n}"
-    used.add(code)
-    return code
-
 predictor = CascadePredictor()
 
 # Dispatcher Copilot — natural-language agent over the live predictor/graph.
@@ -191,12 +190,22 @@ from copilot import DispatcherCopilot  # noqa: E402
 copilot = DispatcherCopilot(predictor)
 
 # ---------------------------------------------------------------------------
-# In-memory user store + prediction history (demo-grade; resets on restart).
+# Users + prediction history
+#
+# Users now live in a hashed on-disk store (``src/auth.py``) instead of an
+# in-memory dict of plaintext passwords, and sessions are signed tokens rather
+# than a client-side flag. Prediction history remains in memory: it is a
+# convenience view, not a system of record — the audit log is the record.
 # ---------------------------------------------------------------------------
-USERS = {
-    AUTH_USER: {"password": AUTH_PASS, "full_name": "Dispatcher", "email": "admin@swr.in"},
-}
 HISTORY: list[dict] = []
+
+
+def _principal_or_none(request: Request) -> Principal | None:
+    """Best-effort identity for endpoints that work with or without auth."""
+    try:
+        return current_user(request)
+    except HTTPException:
+        return None
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -288,19 +297,27 @@ class SelectModelRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/")
 def root():
-    """Serve the standalone dispatcher dashboard (proxy/iframe-friendly)."""
-    return FileResponse(str(Path(__file__).parent / "dashboard.html"))
+    """Serve the standalone dispatcher dashboard (proxy/iframe-friendly).
+
+    ``no-store`` matters: the dashboard is the security-relevant client, and a
+    cached copy from before an upgrade can keep calling the API the old way
+    (unauthenticated), which looks exactly like a broken login.
+    """
+    return FileResponse(
+        str(Path(__file__).parent / "dashboard.html"),
+        headers={"Cache-Control": "no-store, must-revalidate", "Pragma": "no-cache"},
+    )
 
 
 # ---------------------------------------------------------------------------
 # Dispatcher Copilot (agentic Q&A over the live network)
 # ---------------------------------------------------------------------------
-@app.get("/copilot/status")
+@app.get("/copilot/status", dependencies=[Depends(require_dispatcher)])
 def copilot_status():
     return copilot.status()
 
 
-@app.post("/copilot/chat")
+@app.post("/copilot/chat", dependencies=[Depends(require_dispatcher)])
 def copilot_chat(req: CopilotRequest):
     return copilot.chat(req.message)
 
@@ -311,24 +328,98 @@ def health():
 
 
 @app.post("/login")
-def login(creds: LoginRequest):
-    """Validate dispatcher credentials (in-memory user store)."""
-    u = creds.username.strip().lower()
-    rec = next((v for k, v in USERS.items() if k.lower() == u), None)
-    if rec and rec["password"] == creds.password:
-        return {"success": True, "username": creds.username, "full_name": rec["full_name"]}
-    return {"success": False}
+def login(creds: LoginRequest, request: Request, response: Response):
+    """Exchange credentials for a signed session token.
+
+    Brute-force protection: the failure counter is keyed by username *and*
+    client IP, and both a lockout and a failed attempt are recorded in the audit
+    log. The response never distinguishes "no such user" from "wrong password".
+
+    The token is returned **both** in the response body and as an HttpOnly
+    cookie. The body copy is what the dashboard normally uses; the cookie exists
+    because some hosting layers and embedded frames strip the ``Authorization``
+    header or deny the page access to browser storage, and in that case the
+    cookie is the only credential path that survives. Accepting either transport
+    costs nothing and removes a whole class of "signed in, but every request is
+    401" failures.
+    """
+    username = (creds.username or "").strip()
+    key = f"{username.lower()}|{request.client.host if request.client else 'unknown'}"
+    wait = throttle.check(key)
+    if wait:
+        log_event("login_throttled", username=username, path="/login",
+                  status_code=429, detail={"retry_after_s": wait})
+        raise HTTPException(
+            429, f"Too many failed sign-in attempts. Try again in {wait} seconds.",
+            headers={"Retry-After": str(wait)},
+        )
+
+    record = authenticate(username, creds.password or "")
+    if record is None:
+        throttle.record_failure(key)
+        log_event("login_failure", username=username, path="/login", status_code=401)
+        return {"success": False, "message": "Incorrect username or password."}
+
+    throttle.reset(key)
+    token = issue_token(record["username"], record.get("role", "dispatcher"),
+                        record.get("full_name", ""))
+    log_event("login_success", username=record["username"],
+              role=record.get("role"), path="/login", status_code=200)
+    response.set_cookie(
+        SESSION_COOKIE, token["token"],
+        max_age=TOKEN_TTL_SECONDS, httponly=True, samesite="lax", path="/",
+    )
+    return {
+        "success": True,
+        "username": record["username"],
+        "full_name": record.get("full_name", ""),
+        "role": record.get("role", "dispatcher"),
+        "token": token["token"],
+        "expires_at": token["expires_at"],
+    }
+
+
+@app.get("/auth/config")
+def auth_config():
+    """Public: what authentication this deployment expects (no secrets)."""
+    return auth_status()
+
+
+@app.get("/auth/me")
+def auth_me(principal: Principal = Depends(require_viewer)):
+    """Validate a token and return the caller's identity + permissions."""
+    return {
+        "username": principal.username, "role": principal.role,
+        "full_name": principal.full_name, "expires_at": principal.exp,
+        "permissions": {role: principal.has(role) for role in ROLES},
+    }
+
+
+@app.post("/auth/logout")
+def auth_logout(response: Response, principal: Principal = Depends(require_viewer)):
+    """Tokens are stateless; the client discards it — including the cookie copy."""
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    log_event("logout", username=principal.username, role=principal.role,
+              path="/auth/logout", status_code=200)
+    return {"success": True}
 
 
 @app.post("/register")
 def register(req: RegisterRequest):
-    """Create a new dispatcher account (in-memory).
+    """Create a new account (role ``dispatcher``) with a hashed password.
+
+    Self-registration can be disabled entirely with
+    ``SWR_ALLOW_SELF_REGISTRATION=0``; when enabled, new accounts are always
+    created at the lowest operational role, never as admin.
 
     Enforces password + email restrictions:
       - password: 8+ chars, at least one uppercase, one lowercase, one digit,
         one special character
       - email: must be a valid address (user@domain.tld)
     """
+    if not ALLOW_SELF_REGISTRATION:
+        raise HTTPException(403, "Self-registration is disabled on this deployment. "
+                                "Ask an administrator to create your account.")
     u = req.username.strip()
     if not u or not req.password:
         return {"success": False, "message": "Username and password are required."}
@@ -353,16 +444,41 @@ def register(req: RegisterRequest):
     if issues:
         return {"success": False, "message":
                 "Password needs " + ", ".join(issues) + "."}
-    if any(k.lower() == u.lower() for k in USERS):
+    if users.get(u):
         return {"success": False, "message": "Username already exists."}
-    USERS[u] = {"password": req.password, "full_name": req.full_name.strip() or u,
-                "email": email}
-    return {"success": True, "username": u, "full_name": USERS[u]["full_name"]}
+    try:
+        record = users.create(username=u, password_hash=hash_password(req.password),
+                              full_name=req.full_name.strip() or u, email=email,
+                              role="dispatcher")
+    except ValueError as exc:
+        return {"success": False, "message": str(exc)}
+    # Registration does not sign the user in; they must authenticate normally.
+    log_event("user_registered", username=record["username"], role=record["role"],
+              path="/register", status_code=200, detail={"email": email})
+    return {"success": True, "username": record["username"],
+            "full_name": record["full_name"], "role": record["role"],
+            "message": "Account created. Sign in to continue."}
 
 
-@app.get("/system/overview")
+@app.get("/system/overview", dependencies=[Depends(require_viewer)])
 def system_overview():
-    metrics = predictor.model_metrics()
+    info = predictor.model_info()
+    return {
+        # --- what is being served, and on what evidence ---------------------
+        "provenance": info["provenance"],
+        "provenance_label": info["provenance_label"],
+        "persistence": info["persistence"],
+        "uncertainty": info["uncertainty"],
+        "governance": {"audit": audit_summary(), "auth": auth_status()["enabled"]},
+        **{k: v for k, v in info.items()
+           if k in {"active_model", "available_models", "network_version",
+                    "training_rows", "calibration_rows"}},
+        **_system_overview_model_block(),
+    }
+
+
+def _system_overview_model_block() -> dict:
+    """The model-bake-off block of ``/system/overview`` (unchanged contract)."""
     best = predictor.best_name
     return {
         "model": predictor.dashboard_name,
@@ -374,12 +490,10 @@ def system_overview():
         "target": predictor.bundle.get("metadata", {}).get("target", "?"),
         "n_train": predictor.bundle.get("metadata", {}).get("n_train", 0),
         "n_test": predictor.bundle.get("metadata", {}).get("n_test", 0),
-        "network_version": predictor.bundle.get("metadata", {}).get("network_version", "?"),
-        "available_models": [m["name"] for m in predictor.available_models()],
     }
 
 
-@app.get("/graph")
+@app.get("/graph", dependencies=[Depends(require_viewer)])
 def graph():
     """The full rail network as JSON: nodes (with all centralities) + edges."""
     G = predictor.G
@@ -404,31 +518,31 @@ def graph():
     return {"nodes": nodes, "edges": edges, "layout": "geo"}
 
 
-@app.get("/stations")
+@app.get("/stations", dependencies=[Depends(require_viewer)])
 def stations():
     return {"stations": predictor.station_names()}
 
 
-@app.get("/stations/{name}")
+@app.get("/stations/{name}", dependencies=[Depends(require_viewer)])
 def station_meta(name: str):
     if name not in predictor.G:
         raise HTTPException(404, f"Unknown station '{name}'")
     return predictor.station_meta(name)
 
 
-@app.get("/model/metrics")
+@app.get("/model/metrics", dependencies=[Depends(require_viewer)])
 def model_metrics():
     return predictor.model_metrics()
 
 
-@app.get("/models")
+@app.get("/models", dependencies=[Depends(require_viewer)])
 def models():
     """The selectable model menu (top-5 persisted models) + active model."""
     return {"models": predictor.available_models(),
             "active": predictor.dashboard_name}
 
 
-@app.post("/model/select")
+@app.post("/model/select", dependencies=[Depends(require_controller)])
 def model_select(req: SelectModelRequest):
     """Switch the active prediction model used by the whole app."""
     try:
@@ -442,7 +556,8 @@ def model_select(req: SelectModelRequest):
 
 
 @app.post("/predict/manual")
-def predict_manual(req: ManualRequest):
+def predict_manual(req: ManualRequest,
+                   principal: Principal = Depends(require_dispatcher)):
     if req.current_station not in predictor.G:
         raise HTTPException(404, f"Unknown station '{req.current_station}'")
     if req.model:  # optional per-request model override (live menu switch)
@@ -469,10 +584,11 @@ def predict_manual(req: ManualRequest):
         "alert_level": result["alert"]["level"],
     })
     HISTORY[:] = HISTORY[-50:]
+    _audit_prediction("manual", req.model_dump(), result, principal)
     return result
 
 
-@app.get("/history")
+@app.get("/history", dependencies=[Depends(require_dispatcher)])
 def history():
     return {"history": list(reversed(HISTORY))}
 
@@ -482,7 +598,7 @@ def history():
 # Flow: GPS (lat,lon) -> nearest station -> current delay -> ML prediction
 #       -> NetworkX cascade -> updated risk -> map
 # ---------------------------------------------------------------------------
-@app.get("/gps/nearest")
+@app.get("/gps/nearest", dependencies=[Depends(require_dispatcher)])
 def gps_nearest(lat: float, lon: float):
     """Detect the nearest railway station for a GPS coordinate."""
     name, dist = _nearest_station(lat, lon)
@@ -494,7 +610,7 @@ def gps_nearest(lat: float, lon: float):
     }
 
 
-@app.get("/gps/route")
+@app.get("/gps/route", dependencies=[Depends(require_dispatcher)])
 def gps_route(origin: str, destination: str):
     """Shortest rail route (NetworkX) with coordinates — used by Demo GPS mode."""
     if origin not in predictor.G:
@@ -509,7 +625,7 @@ def gps_route(origin: str, destination: str):
             "km": round(path_distance_km(predictor.G, path), 1)}
 
 
-@app.post("/gps/predict")
+@app.post("/gps/predict", dependencies=[Depends(require_dispatcher)])
 def gps_predict(req: GpsRequest):
     """Full GPS→prediction→cascade pipeline for one train position.
 
@@ -565,7 +681,7 @@ def gps_predict(req: GpsRequest):
     }
 
 
-@app.get("/demo/records")
+@app.get("/demo/records", dependencies=[Depends(require_viewer)])
 def demo_records():
     """Five pre-canned scenarios run live through the predictor."""
     scenarios = [
@@ -597,7 +713,7 @@ def demo_records():
     return {"records": rows}
 
 
-@app.post("/predict/batch")
+@app.post("/predict/batch", dependencies=[Depends(require_dispatcher)])
 def predict_batch(rows: list[BatchRow]):
     out = []
     for r in rows:
@@ -620,7 +736,8 @@ def predict_batch(rows: list[BatchRow]):
 
 
 @app.post("/predict/upload")
-async def predict_upload(file: UploadFile = File(...)):
+async def predict_upload(file: UploadFile = File(...),
+                         principal: Principal = Depends(require_dispatcher)):
     raw = await file.read()
     try:
         df = pd.read_csv(io.BytesIO(raw))
@@ -662,6 +779,12 @@ async def predict_upload(file: UploadFile = File(...)):
     export_id = f"batch_predictions_{int(time.time())}.csv"
     path = EXPORTS_DIR / export_id
     df_out.to_csv(path, index=False)
+    log_event("batch_prediction", path="/predict/upload", status_code=200,
+              detail={"export_id": export_id, "rows_scored": int(len(df_out)),
+                      "rows_failed": int((df_out.get("error").notna()).sum())
+                      if "error" in df_out else 0},
+              username=getattr(principal, "username", None),
+              role=getattr(principal, "role", None))
     return {"export_id": export_id, "rows": results, "download": f"/export/{export_id}"}
 
 
@@ -672,7 +795,7 @@ def _opt(row: pd.Series, col: str) -> Optional[str]:
     return str(v).strip() or None
 
 
-@app.get("/export/{export_id}")
+@app.get("/export/{export_id}", dependencies=[Depends(require_dispatcher)])
 def export(export_id: str):
     path = EXPORTS_DIR / export_id
     if not path.exists():
@@ -684,6 +807,212 @@ def export(export_id: str):
     )
 
 
-@app.get("/exports")
+@app.get("/exports", dependencies=[Depends(require_dispatcher)])
 def list_exports():
     return {"exports": sorted(p.name for p in EXPORTS_DIR.glob("*.csv"))}
+
+
+# ---------------------------------------------------------------------------
+# Audit helper used by the prediction endpoints
+# ---------------------------------------------------------------------------
+def _audit_prediction(kind: str, inputs: dict, result: dict,
+                      principal: Optional[Principal] = None) -> None:
+    """Record a prediction so it can be reviewed against what actually happened.
+
+    The digest is deliberately compact: the operational inputs (station, delay,
+    train type, time) and the headline outputs. Full payloads are not stored, so
+    the audit trail cannot become an accidental personal-data store.
+    """
+    try:
+        alert = result.get("alert") or {}
+        uncertainty = result.get("uncertainty") or {}
+        log_event(
+            "prediction",
+            username=getattr(principal, "username", None),
+            role=getattr(principal, "role", None),
+            path=f"/predict/{kind}",
+            detail={
+                "inputs": {k: inputs.get(k) for k in
+                           ("current_station", "upcoming_station", "destination",
+                            "train_type", "hour", "day", "weather",
+                            "current_delay_min", "train_number")},
+                "predicted_delay_min": result.get("predicted_destination_arrival_delay_min"),
+                "cascade_level": alert.get("level"),
+                "interval_80": (uncertainty.get("intervals") or {}).get("80"),
+                "model": result.get("model"),
+            },
+        )
+    except Exception:  # noqa: BLE001 - never block a prediction on auditing
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Governance: audit trail + user administration
+# ---------------------------------------------------------------------------
+@app.get("/admin/audit", dependencies=[Depends(require_admin)])
+def admin_audit(limit: int = 100, event: Optional[str] = None,
+                username: Optional[str] = None):
+    """The append-only audit trail, newest first (admin only)."""
+    limit = max(1, min(int(limit), 1000))
+    return {"entries": audit_recent(limit, username=username, event=event),
+            "summary": audit_summary()}
+
+
+@app.get("/admin/users", dependencies=[Depends(require_admin)])
+def admin_users():
+    return {"users": users.all_public(), "roles": list(ROLES)}
+
+
+class RoleRequest(BaseModel):
+    role: str
+
+
+@app.post("/admin/users/{username}/role", dependencies=[Depends(require_admin)])
+def admin_set_role(username: str, req: RoleRequest, principal: Principal = Depends(require_admin)):
+    """Change a user's role (admin only). Recorded in the audit trail."""
+    try:
+        record = users.set_role(username, req.role)
+    except KeyError:
+        raise HTTPException(404, f"Unknown user '{username}'")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    log_event("role_changed", username=principal.username, role=principal.role,
+              path=f"/admin/users/{username}/role", status_code=200,
+              detail={"target": username, "new_role": record["role"]})
+    return {"success": True, "username": record["username"], "role": record["role"]}
+
+
+# ---------------------------------------------------------------------------
+# Real-data ingestion (the path from simulated to observed traffic)
+# ---------------------------------------------------------------------------
+@app.post("/ingest/upload", dependencies=[Depends(require_controller)])
+async def ingest_upload(file: UploadFile = File(...),
+                        principal: Principal = Depends(require_controller)):
+    """Ingest an operator export (CSV/Excel) of journey observations.
+
+    Columns are mapped onto the canonical schema automatically where possible;
+    anything unmappable is reported rather than silently dropped, and every row
+    must pass the data-quality gate before it can influence a model.
+    """
+    from sources.ingest import ingest_dataframe, read_table
+
+    raw = await file.read()
+    tmp_dir = ROOT / "data" / "raw" / "_incoming"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp = tmp_dir / (file.filename or "upload.csv")
+    tmp.write_bytes(raw)
+    try:
+        df = read_table(tmp)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"Could not read '{file.filename}': {exc}")
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+
+    report = ingest_dataframe(df, source_name=file.filename or "upload")
+    log_event("ingest", username=principal.username, role=principal.role,
+              path="/ingest/upload", status_code=200,
+              detail={"source": report.get("source"), "accepted": report.get("accepted"),
+                      "rejected": report.get("rejected")})
+    return report
+
+
+class IngestRecordsRequest(BaseModel):
+    records: list[dict]
+    source: str = "live-feed"
+
+
+@app.post("/ingest/records", dependencies=[Depends(require_controller)])
+def ingest_records(req: IngestRecordsRequest,
+                   principal: Principal = Depends(require_controller)):
+    """Webhook for a live feed: post canonical journey records as JSON.
+
+    This is the integration point for an authorised NTES/NTES-style feed or a
+    control-office export stream. Rows are validated exactly as an upload is.
+    """
+    from sources.ingest import ingest_dataframe
+
+    if not req.records:
+        raise HTTPException(400, "No records supplied.")
+    if len(req.records) > 5000:
+        raise HTTPException(413, "Send at most 5,000 records per call.")
+    frame = pd.DataFrame(req.records)
+    report = ingest_dataframe(frame, source_name=req.source)
+    log_event("ingest", username=principal.username, role=principal.role,
+              path="/ingest/records", status_code=200,
+              detail={"source": req.source, "accepted": report.get("accepted"),
+                      "rejected": report.get("rejected")})
+    return report
+
+
+@app.get("/ingest/status", dependencies=[Depends(require_viewer)])
+def ingest_status():
+    """What real data has been ingested, and what that means for provenance."""
+    from sources.ingest import detect_provenance, ingestion_history, load_observed
+
+    observed = load_observed()
+    provenance = detect_provenance()
+    return {
+        "provenance": provenance,
+        "provenance_label": PROVENANCE_LABELS.get(provenance, provenance),
+        "observed_rows": 0 if observed is None else int(len(observed)),
+        "history": ingestion_history()[-20:],
+        "training_data": predictor.model_info()["provenance"],
+        "note": ("Ingested observations are picked up by the next training run "
+                 "(`python src/feature_engineering.py && python src/train.py`)."),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Data-quality & attribution views
+# ---------------------------------------------------------------------------
+@app.get("/data/causes", dependencies=[Depends(require_viewer)])
+def data_causes():
+    """Delay-minutes per cause head — the 'why', not just the 'how late'.
+
+    Empty until real observations with cause codes have been ingested; the
+    dashboard shows the explanatory empty state rather than a fabricated chart.
+    """
+    from sources.causes import CAUSE_HEADS
+    from sources.ingest import cause_attribution, load_observed
+
+    rows = cause_attribution()
+    return {
+        "attribution": rows,
+        "taxonomy": [{"cause": k, **v} for k, v in CAUSE_HEADS.items()],
+        "observed_rows": 0 if load_observed() is None else int(len(load_observed())),
+        "available": bool(rows),
+        "note": ("Cause attribution needs ingested observations carrying a cause "
+                 "code. Use /ingest/upload with a 'cause' column."),
+    }
+
+
+@app.get("/data/parity", dependencies=[Depends(require_viewer)])
+def data_parity():
+    """Does the ingested data look like the world the model was trained on?
+
+    Compares the training feature distribution against the ingested observations
+    feature-by-feature (two-sample KS). A drift verdict is a statement about
+    validity, not accuracy: it says whether the reported metrics can be expected
+    to transfer to this traffic at all.
+    """
+    from sources.ingest import load_observed
+    from sources.parity import parity_report
+
+    observed = load_observed()
+    if observed is None or not len(observed):
+        return {"available": False,
+                "note": ("No observed data ingested yet. Upload a real export to "
+                         "POST /ingest/upload to run the parity check.")}
+    try:
+        reference = pd.read_csv(DATA_DIR / "processed" / "features.csv")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Training features unavailable: {exc}")
+
+    shared = [c for c in reference.columns
+              if c in observed.columns and pd.api.types.is_numeric_dtype(reference[c])]
+    report = parity_report(reference, observed, features=shared)
+    report.pop("table", None)          # keep the payload small; the UI shows top rows
+    return {"available": True, **report}

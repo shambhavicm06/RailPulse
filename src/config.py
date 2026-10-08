@@ -17,6 +17,22 @@ from pathlib import Path
 AUTH_USER = os.environ.get("SWR_USER", "admin")
 AUTH_PASS = os.environ.get("SWR_PASS", "swr2026")
 
+# ----------------------------------------------------------------------------
+# CORS allow-list (was "*"). Same-origin clients (the bundled dashboard) always
+# work; add hosts here for separately deployed clients.
+# ----------------------------------------------------------------------------
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get(
+        "SWR_ALLOWED_ORIGINS",
+        "http://localhost:8000,http://127.0.0.1:8000,http://localhost:7860,"
+        "http://127.0.0.1:7860",
+    ).split(",") if o.strip()
+]
+
+# Self-registration creates a low-privilege (dispatcher) account. Fine for a
+# demo/classroom deployment; switch it off for anything real.
+ALLOW_SELF_REGISTRATION = os.environ.get("SWR_ALLOW_SELF_REGISTRATION", "1") == "1"
+
 # Bump this whenever the network topology changes: the app will detect a
 # version mismatch and retrain automatically so stale graphs are never served.
 NETWORK_VERSION = "2-national"
@@ -76,6 +92,43 @@ FULL_FEATURES = (
     ISOLATED_FEATURES + STATIC_GRAPH_FEATURES + DYNAMIC_NETWORK_FEATURES + CLUSTER_FEATURES
 )
 TARGET = "destination_arrival_delay_min"
+
+# ----------------------------------------------------------------------------
+# Data provenance
+#
+# The published model is trained on a SIMULATED delay field
+# (``data_generator.py``) because no live NTES feed is openly available. That is
+# a legitimate modelling choice for a research prototype — but it is not
+# acceptable for the app to present simulated performance as if it were
+# measured on real traffic. This value travels into the model bundle, the API
+# and the dashboard badge, and ``sources/ingest.py`` upgrades it automatically
+# when genuine data is loaded.
+#
+#   "synthetic"       - trained only on the simulator
+#   "synthetic+real"  - simulator used for pre-training, real data for fine-tuning
+#   "real"            - trained only on observed railway data
+# ----------------------------------------------------------------------------
+PROVENANCE = os.environ.get("SWR_PROVENANCE", "synthetic")
+PROVENANCE_LABELS = {
+    "synthetic": "Simulated dataset (no live NTES feed available)",
+    "synthetic+real": "Mixed — simulator for pre-training, real logs for fine-tuning",
+    "real": "Observed railway data",
+}
+
+# Conformal uncertainty artefacts
+UNCERTAINTY_CSV = RESULTS_DIR / "uncertainty_metrics.csv"
+CALIBRATION_JSON = MODEL_DIR / "calibration.json"
+# Delay -> congestion relationship fitted on the training sample. Written by
+# train.py, read by both inference (when no live feed supplies congestion) and
+# ingestion (when a real feed omits it), so both sides speak the same feature
+# space the models were fitted on.
+CONGESTION_PROXY_JSON = MODEL_DIR / "congestion_proxy.json"
+STATION_CLUSTERS_JSON = PROCESSED_DIR / "station_clusters.json"  # DBSCAN labels per station
+ENSEMBLE_DIR = MODEL_DIR / "ensemble"        # fused-ensemble components (portable formats)
+
+# Auto-retraining is now explicit: a version mismatch is reported and does NOT
+# silently replace the served model unless this is switched on.
+AUTO_RETRAIN = os.environ.get("SWR_AUTO_RETRAIN", "0") == "1"
 
 # ----------------------------------------------------------------------------
 # Weather / train-type delay penalties (used by the data generator)

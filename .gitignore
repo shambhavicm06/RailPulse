@@ -16,3 +16,20 @@ dist/
 .DS_Store
 .vscode/
 .idea/
+
+# Authentication / governance state (never commit secrets or audit trails)
+data/.auth_secret
+data/users.json
+data/audit.db
+data/audit.db-wal
+data/audit.db-shm
+
+# Ingested observations (operator data — keep out of the repo)
+data/raw/observed_journeys.csv
+data/raw/ingestion_log.json
+data/raw/_incoming/
+
+# Tooling
+.pytest_cache/
+.coverage
+htmlcov/

@@ -17,20 +17,26 @@ import pandas as pd
 # Make sibling modules importable regardless of the current working directory.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import (BUNDLE_PATH, FEATURES_CSV, FULL_FEATURES, MODEL_DIR,
-                    NETWORK_VERSION, RAW_CSV)
+from config import (AUTO_RETRAIN, BUNDLE_PATH, ENSEMBLE_DIR, FEATURES_CSV,
+                    FULL_FEATURES, MODEL_DIR, NETWORK_VERSION, PROVENANCE,
+                    PROVENANCE_LABELS, RAW_CSV)
 from graph_utils import (build_graph, cascade_alert, compute_centralities,
                          nodes_within_radius, path_distance_km, shortest_path_km)
+from model_io import load_ensemble, load_if_available
 
 
 def ensure_bundle() -> None:
     """
-    Make sure a *loadable, up-to-date* trained bundle exists on disk.
+    Make sure a *loadable* trained bundle exists on disk.
 
-    Retrains automatically when:
-      - the bundle is missing or corrupted, or
-      - it was pickled with different library versions, or
-      - the network topology changed (NETWORK_VERSION mismatch).
+    Retraining policy (changed from the original silent self-heal):
+
+    * **Missing or unreadable bundle** -> regenerate. The app cannot serve
+      without a model, so this is unavoidable; it is logged loudly.
+    * **Network topology changed** (``NETWORK_VERSION`` mismatch) -> retrain
+      **only** when ``SWR_AUTO_RETRAIN=1``. Otherwise the change is reported and
+      the existing model keeps serving, because silently swapping the live model
+      mid-shift is exactly the failure mode this guard exists to prevent.
     """
     need_regen = False
     reason = ""
@@ -41,9 +47,18 @@ def ensure_bundle() -> None:
     else:
         try:
             b = joblib.load(BUNDLE_PATH)
-            if b.get("metadata", {}).get("network_version") != NETWORK_VERSION:
-                need_regen = True
-                reason = "network topology changed"
+            served = b.get("metadata", {}).get("network_version")
+            if served != NETWORK_VERSION:
+                if AUTO_RETRAIN:
+                    need_regen = True
+                    reason = (f"network topology changed "
+                              f"({served} -> {NETWORK_VERSION}), SWR_AUTO_RETRAIN=1")
+                else:
+                    print(f"[bundle] ⚠  Network topology changed "
+                          f"({served} -> {NETWORK_VERSION}) but the served model was "
+                          f"trained on the older graph. Set SWR_AUTO_RETRAIN=1 (or run "
+                          f"`python src/train.py`) to retrain. The existing model is "
+                          f"kept in service and flagged in /system/overview.")
         except Exception as e:  # noqa: BLE001
             need_regen = True
             reason = f"{type(e).__name__}: {e}"
@@ -59,6 +74,7 @@ def ensure_bundle() -> None:
         print("[bundle] retraining complete.")
 
 
+
 class CascadePredictor:
     def __init__(self, bundle_path=BUNDLE_PATH):
         ensure_bundle()
@@ -67,36 +83,83 @@ class CascadePredictor:
         self.best_name: str = self.bundle.get("best_model_name", "?")
 
         # ---- model menu -----------------------------------------------------
-        # Start from the models persisted in the bundle (voting ensemble +
-        # LightGBM), then merge in the individually-saved top-5 models. Loading
-        # is per-file so an optional dependency (e.g. CatBoost) that is missing
-        # at runtime only removes one menu entry instead of breaking the app.
+        # The fused ensemble and the compact single model are rebuilt from
+        # portable per-library formats (model_io) rather than unpickled whole, so
+        # a library upgrade cannot break the served model. Older bundles that
+        # still carry pickled objects are accepted for backward compatibility.
         self.models: dict[str, object] = {}
-        if "dashboard_model" in self.bundle:
-            self.models[self.bundle.get(
-                "dashboard_model_name", "NetworkAwareVoting")] = self.bundle["dashboard_model"]
-        if "single_model" in self.bundle:
-            self.models[self.bundle.get(
-                "single_model_name", "LightGBM")] = self.bundle["single_model"]
+        self.persistence: dict[str, str] = {}      # model name -> storage format
+        self.portable: bool = False
+
+        manifest = self.bundle.get("ensemble_manifest")
+        if manifest:
+            ensemble = load_ensemble(manifest, ENSEMBLE_DIR)
+            if ensemble is not None:
+                self.models[self.bundle.get("dashboard_model_name",
+                                            "NetworkAwareVoting")] = ensemble
+                self.persistence[ensemble.__class__.__name__] = "portable"
+                self.portable = True
+                print(f"[models] Rebuilt fused ensemble from portable components: "
+                      f"{', '.join(ensemble.component_names)}")
+        if "dashboard_model" in self.bundle:        # legacy pickled bundle
+            self.models.setdefault(
+                self.bundle.get("dashboard_model_name", "NetworkAwareVoting"),
+                self.bundle["dashboard_model"])
+
+        single_file = self.bundle.get("single_model_file")
+        if single_file:
+            model = load_if_available(MODEL_DIR / single_file)
+            if model is not None:
+                self.models[self.bundle.get("single_model_name", "LightGBM")] = model
+        if "single_model" in self.bundle:            # legacy pickled bundle
+            self.models.setdefault(self.bundle.get("single_model_name", "LightGBM"),
+                                   self.bundle["single_model"])
         if "models" in self.bundle:  # backward-compat with a full 'models' dict
             for name, m in self.bundle["models"].items():
                 self.models.setdefault(name, m)
+
         top5_dir = MODEL_DIR / "top5"
         if top5_dir.is_dir():
-            for f in sorted(top5_dir.glob("*.joblib")):
+            candidates = (sorted(top5_dir.glob("*.json")) + sorted(top5_dir.glob("*.txt"))
+                          + sorted(top5_dir.glob("*.cbm")) + sorted(top5_dir.glob("*.joblib")))
+            for f in candidates:
                 name = f.stem
                 if name in self.models:
                     continue
+                model = load_if_available(f)
+                if model is not None:
+                    self.models[name] = model
+                    self.persistence[name] = "portable" if f.suffix != ".joblib" \
+                        else "joblib (pinned)"
+
+        # ---- uncertainty (quantile models + conformal offsets) --------------
+        self.quantile_models: dict[float, object] = {}
+        for level_key, filename in (self.bundle.get("quantile_manifest") or {}).items():
+            model = load_if_available(MODEL_DIR / "quantiles" / filename)
+            if model is not None:
                 try:
-                    self.models[name] = joblib.load(f)
-                except Exception:  # noqa: BLE001 - skip unloadable model files
+                    self.quantile_models[round(float(level_key), 4)] = model
+                except ValueError:
                     pass
+        self.calibration: dict = self.bundle.get("calibration", {}) or {}
+        if self.quantile_models:
+            print(f"[models] Loaded {len(self.quantile_models)} quantile models "
+                  f"for conformal prediction "
+                  f"({len(self.calibration)} calibrated coverage levels)")
+
 
         # Default active model = the dashboard's fused ensemble.
         default = self.bundle.get("dashboard_model_name", "NetworkAwareVoting")
         self.dashboard_name = default if default in self.models else (
             self.best_name if self.best_name in self.models else next(iter(self.models)))
         self.model = self.models[self.dashboard_name]
+
+        # Station -> DBSCAN cluster label learned at training time. Without it
+        # inference would have to guess, and the guess would not match training.
+        self.station_clusters: dict = self.bundle.get("station_clusters", {}) or {}
+        # Empirical congestion→delay relationship, used only when the caller does
+        # not supply a live congestion field.
+        self.congestion_proxy: dict = self.bundle.get("congestion_proxy", {}) or {}
 
         self.features: list = self.bundle["features"]
         self.encoders = self.bundle["encoders"]
@@ -197,22 +260,33 @@ class CascadePredictor:
         day_enc = self.encoders["day"].get(day, 0)
         r1 = r2 = r3 = cdi = 0.0
         if congestion_inputs:
+            # Preferred path: a live congestion field from the feed.
             r1 = float(congestion_inputs.get("congestion_r1", 0.0))
             r2 = float(congestion_inputs.get("congestion_r2", 0.0))
             r3 = float(congestion_inputs.get("congestion_r3", 0.0))
             cdi = float(congestion_inputs.get("cascading_delay_index", 0.0))
         else:
-            # assume the focal delay is representative of the ring, decaying with hops
-            import math
-            ring = nodes_within_radius(self.G, current, radius=3)
-            n1 = sum(1 for h in ring.values() if h == 1)
-            n2 = sum(1 for h in ring.values() if h == 2)
-            n3 = sum(1 for h in ring.values() if h == 3)
-            base = max(0.0, current_delay * 0.5)
-            r1 = base
-            r2 = (r1 * n1 + base * 0.5 * n2) / max(1, n1 + n2)
-            r3 = (r1 * n1 + base * 0.5 * n2 + base * 0.25 * n3) / max(1, n1 + n2 + n3)
-            cdi = r1 * n1 + base * 0.5 * n2 + base * 0.25 * n3
+            # Fallback: synthesise the rings from the reported delay using the
+            # relationship fitted on the training sample (per station where
+            # possible). This keeps the served features inside the distribution
+            # the models were fitted on — the previous 0.5 × delay guess put the
+            # model's second-most-important feature outside its training range.
+            proxy = self.congestion_proxy or {}
+            fits = (proxy.get("per_station", {}).get(current)
+                    or proxy.get("global", {}))
+            delay = max(0.0, float(current_delay))
+
+            def _predict(feature: str, default: float) -> float:
+                coefficients = fits.get(feature)
+                if not coefficients:
+                    return default
+                slope, intercept = coefficients
+                return max(0.0, slope * delay + intercept)
+
+            r1 = _predict("congestion_r1", delay * 0.5)
+            r2 = _predict("congestion_r2", r1 * 0.78)
+            r3 = _predict("congestion_r3", r1 * 0.62)
+            cdi = _predict("cascading_delay_index", r1 * 6.1)
         return {
             "congestion_r1": round(r1, 2), "congestion_r2": round(r2, 2),
             "congestion_r3": round(r3, 2),
@@ -220,9 +294,22 @@ class CascadePredictor:
         }
 
     def _cluster(self, current: str) -> float:
-        # nearest trained cluster label via graph-neighbour agreement; without
-        # the DBSCAN artifact at inference time we use a deterministic proxy:
-        # cluster id = index of the station's eigenvector-cent bucket (0..4).
+        """The station's DBSCAN delay-sink cluster, as seen during training.
+
+        The label is read from the map persisted by ``feature_engineering.py``.
+        The previous implementation derived a proxy from eigenvector centrality
+        that evaluated to 0 for essentially every station — and 0 means "DBSCAN
+        noise" in the training data, so the served model received a feature value
+        with a different meaning from the one it was fitted on. The fallback is
+        kept only so an older bundle still runs; it is logged as a warning.
+        """
+        if current in self.station_clusters:
+            return float(self.station_clusters[current])
+        if not getattr(self, "_cluster_warned", False):
+            print("[inference] ⚠  No station→cluster map in this bundle: "
+                  "`delay_cluster` falls back to a proxy and will not match "
+                  "training values. Re-run src/train.py to fix.")
+            self._cluster_warned = True
         ev = self._cget(current, "eigenvector_centrality")
         return float(min(4, int(ev * 10)))
 
@@ -265,6 +352,103 @@ class CascadePredictor:
             "features_used": feats,
             "alert": alert,
             "model": self.dashboard_name,
+            "uncertainty": self.uncertainty_report(row, float(pred)),
+        }
+
+    # -- uncertainty ---------------------------------------------------------
+    def uncertainty_report(self, row: pd.DataFrame, point: float) -> dict:
+        """Conformal intervals + exceedance probabilities for one feature row.
+
+        The point estimate is forced inside every interval so the API can never
+        return a headline number that contradicts its own band.
+        """
+        if not self.quantile_models or not self.calibration:
+            return {"available": False,
+                    "note": "This bundle has no quantile models. Retrain with "
+                            "`python src/train.py` to enable conformal intervals."}
+        from uncertainty import (EXCEEDANCE_THRESHOLDS, exceedance_probabilities,
+                                 intervals, predict_quantiles, quantile_levels)
+
+        qmat = predict_quantiles(self.quantile_models, row)
+        levels = quantile_levels(self.quantile_models)
+        median = float(qmat[0, int(np.argmin(np.abs(levels - 0.5)))])
+
+        bands: dict[str, dict] = {}
+        raw_contains_point = True
+        for coverage in sorted(self.calibration):
+            lo, hi = intervals(self.quantile_models, self.calibration, row, coverage)
+            lo_f, hi_f = float(lo[0]), float(hi[0])
+            if not (lo_f <= point <= hi_f):
+                raw_contains_point = False
+            # Guarantee the published band contains the published point estimate:
+            # a headline number outside its own interval would be incoherent for a
+            # controller. The unadjusted bounds are reported alongside so the
+            # adjustment is visible rather than hidden.
+            bands[f"{int(round(coverage * 100))}"] = {
+                "lower": round(min(lo_f, point), 1),
+                "upper": round(max(hi_f, point), 1),
+                "width": round(max(hi_f, point) - min(lo_f, point), 1),
+                "model_lower": round(lo_f, 1),
+                "model_upper": round(hi_f, 1),
+            }
+
+        exc, saturated = exceedance_probabilities(self.quantile_models, qmat,
+                                                 with_saturation=True)
+        return {
+            "available": True,
+            "method": "conformalized quantile regression (CQR)",
+            "median": round(median, 1),
+            "intervals": bands,
+            "exceedance": {f"p_gt_{t}min": round(float(v[0]), 3)
+                           for t, v in exc.items()},
+            "saturated_thresholds": saturated,
+            "saturation_note": (
+                "For these thresholds the estimate lies outside the trained "
+                "quantile range; it is reported at the 0.5 % bound rather than as "
+                "a falsely precise probability." if saturated else None),
+            "consistency": {
+                "point_inside_model_band": raw_contains_point,
+                "median_minus_point_min": round(median - point, 1),
+                "note": ("The point estimate comes from the served point model; the "
+                         "band comes from the quantile model. They are independent "
+                         "estimators of the same quantity, so the reported bounds are "
+                         "expanded when necessary to contain the point. The "
+                         "unadjusted bounds are given as model_lower/model_upper."
+                         if not raw_contains_point else
+                         "Point estimate and calibrated band agree."),
+            },
+            "thresholds_min": list(EXCEEDANCE_THRESHOLDS),
+            "coverage_note": ("Reported bands are calibrated on a held-out split; "
+                              "nominal coverage is a finite-sample guarantee, "
+                              "not an estimate."),
+        }
+
+    def model_info(self) -> dict:
+        """Non-secret description of what is being served (for /system/overview)."""
+        meta = self.bundle.get("metadata", {})
+        provenance = meta.get("provenance", PROVENANCE)
+        return {
+            "active_model": self.dashboard_name,
+            "available_models": [m["name"] for m in self.available_models()],
+            "persistence": {
+                "portable_formats": self.portable,
+                "note": ("XGBoost/LightGBM/CatBoost are stored in their own "
+                         "version-tolerant formats; the fused ensemble is rebuilt "
+                         "from components." if self.portable else
+                         "Legacy pickled bundle — retrain to enable portable "
+                         "persistence."),
+            },
+            "provenance": provenance,
+            "provenance_label": PROVENANCE_LABELS.get(provenance, provenance),
+            "uncertainty": {
+                "enabled": bool(self.quantile_models),
+                "coverage_levels": sorted(self.calibration),
+                **{k: v for k, v in (meta.get("uncertainty") or {}).items()
+                   if k in {"method", "median_mae", "mean_pinball", "test_coverage"}},
+            },
+            "network_version": meta.get("network_version"),
+            "training_rows": meta.get("n_train"),
+            "calibration_rows": meta.get("n_calibration"),
         }
 
     def _default_upcoming(self, current: str, destination: str | None) -> str:

@@ -108,6 +108,57 @@ def _alert_html(alert: dict, pred: int, model: str) -> str:
     """
 
 
+# ---------------------------------------------------------------------------
+# Authenticated backend client
+#
+# The API now requires a signed session token for every operational endpoint, so
+# the console authenticates once with the configured service account and reuses
+# that token. A 401 (expired token) triggers exactly one silent re-login before
+# the error surfaces, which keeps a shift-long console session alive without
+# asking the operator to sign in again.
+# ---------------------------------------------------------------------------
+_TOKEN: str = ""        # service account token (console → API)
+_USER_TOKEN: str = ""  # the signed-in operator's token, preferred when present
+
+
+def _login() -> str:
+    """Obtain a service token from the backend (cached)."""
+    global _TOKEN
+    from config import AUTH_PASS, AUTH_USER
+    try:
+        r = requests.post(f"{BACKEND}/login",
+                          json={"username": AUTH_USER, "password": AUTH_PASS},
+                          timeout=8)
+        if r.status_code == 200 and r.json().get("success"):
+            _TOKEN = r.json().get("token", "")
+    except Exception:  # noqa: BLE001
+        _TOKEN = ""
+    return _TOKEN
+
+
+def _headers() -> dict:
+    """Prefer the signed-in operator's token; fall back to the service account."""
+    token = _USER_TOKEN or _TOKEN or _login()
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+def api_get(path: str, **kwargs):
+    """GET with the service token, retrying once after re-authentication."""
+    r = requests.get(f"{BACKEND}{path}", headers=_headers(), **kwargs)
+    if r.status_code == 401:
+        _login()
+        r = requests.get(f"{BACKEND}{path}", headers=_headers(), **kwargs)
+    return r
+
+
+def api_post(path: str, **kwargs):
+    r = requests.post(f"{BACKEND}{path}", headers=_headers(), **kwargs)
+    if r.status_code == 401:
+        _login()
+        r = requests.post(f"{BACKEND}{path}", headers=_headers(), **kwargs)
+    return r
+
+
 def backend_up() -> bool:
     try:
         r = requests.get(f"{BACKEND}/health", timeout=3)
@@ -118,14 +169,14 @@ def backend_up() -> bool:
 
 def _stations() -> list[str]:
     try:
-        return requests.get(f"{BACKEND}/stations", timeout=5).json()["stations"]
+        return api_get("/stations", timeout=5).json()["stations"]
     except Exception:  # noqa: BLE001
         return []
 
 
 def _status_html() -> str:
     try:
-        o = requests.get(f"{BACKEND}/system/overview", timeout=5).json()
+        o = api_get("/system/overview", timeout=5).json()
         return f"""
         <div style="display:flex;gap:22px;flex-wrap:wrap;">
           <div class="statbox"><div style="color:#7f93a8;font-size:.7em;">ACTIVE MODEL</div>
@@ -151,22 +202,29 @@ def _err_html(msg: str) -> str:
 # Login
 # ---------------------------------------------------------------------------
 def do_login(username: str, password: str):
+    global _USER_TOKEN
     if not backend_up():
         return (_err_html("Backend offline — start FastAPI first (python src/run.py)."),
                 gr.Column(visible=True), gr.Column(visible=False), "")
     try:
         r = requests.post(f"{BACKEND}/login",
                           json={"username": username, "password": password}, timeout=5)
-        ok = r.status_code == 200 and r.json().get("success")
+        payload = r.json() if r.status_code == 200 else {}
+        ok = bool(payload.get("success"))
     except Exception:  # noqa: BLE001
-        ok = False
+        ok, payload = False, {}
     if ok:
+        # Use the operator's own token, so the API audit trail names the human
+        # who asked, not the console's service account.
+        _USER_TOKEN = payload.get("token", "")
         return "", gr.Column(visible=False), gr.Column(visible=True), _status_html()
     return (_err_html("ACCESS DENIED — invalid credentials"),
             gr.Column(visible=True), gr.Column(visible=False), "")
 
 
 def do_logout():
+    global _USER_TOKEN
+    _USER_TOKEN = ""
     return gr.Column(visible=True), gr.Column(visible=False), ""
 
 
@@ -187,7 +245,7 @@ def predict_manual(current_station, upcoming_station, destination, train_type,
         "day": day, "weather": weather, "current_delay_min": float(current_delay_min),
     }
     try:
-        r = requests.post(f"{BACKEND}/predict/manual", json=payload, timeout=30)
+        r = api_post("/predict/manual", json=payload, timeout=30)
         r.raise_for_status()
         res = r.json()
     except Exception as e:  # noqa: BLE001
@@ -204,7 +262,7 @@ def predict_manual(current_station, upcoming_station, destination, train_type,
 
     # station intelligence panel
     try:
-        meta = requests.get(f"{BACKEND}/stations/{current_station}", timeout=5).json()
+        meta = api_get(f"/stations/{current_station}", timeout=5).json()
         sinfo = (
             f"<div class='statbox'>"
             f"<b class='neon-title'>{meta['station']}</b><br>"
@@ -228,8 +286,8 @@ def process_dataset(file):
         return None, "", "", "Backend offline — start FastAPI first."
     try:
         with open(file.name, "rb") as f:
-            r = requests.post(f"{BACKEND}/predict/upload",
-                              files={"file": ("input.csv", f, "text/csv")}, timeout=180)
+            r = api_post("/predict/upload",
+                         files={"file": ("input.csv", f, "text/csv")}, timeout=180)
         r.raise_for_status()
         data = r.json()
     except Exception as e:  # noqa: BLE001

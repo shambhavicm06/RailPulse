@@ -10,8 +10,13 @@ in plain English through a built-in **AI Dispatcher Copilot** — all on a real,
 Google-Maps-style interactive map.
 
 > **Headline result:** graph-derived features cut delay-prediction error (**MAE**) by
-> ~46–53% versus isolated features alone, and a "radius-of-influence" ablation proves the
-> delay ripple **decays with distance** — *no train is an island.*
+> **46.5 %** versus isolated features alone (9.573 → 5.119 min), and most of that gain
+> comes from the *dynamic* network state — the delay observed at neighbouring stations —
+> rather than from static topology. The radius-of-influence ablation shows the 1-edge ring
+> carries nearly all of the signal: adding the 2nd and 3rd rings improves MAE only
+> marginally, and this single split does **not** establish that the ripple demonstrably
+> decays with distance (see *Results* below for the exact numbers and the caveat).
+> *No train is an island* — that part is measured.
 
 ---
 
@@ -179,9 +184,6 @@ username: admin
 password: swr2026
 ```
 
-You can also create an account via the **Create Account** tab (accounts are stored in
-memory for this demo build and reset on restart).
-
 **Change the credentials** with environment variables before launching:
 
 ```bat
@@ -195,6 +197,43 @@ python src\run.py
 # Linux / macOS
 SWR_USER=dispatcher SWR_PASS=my-secret-password python src/run.py
 ```
+
+### How authentication actually works
+
+Authentication is enforced **by the server**, not by hiding the dashboard in the
+browser. Signing in returns a signed session token (HMAC-SHA256, 12-hour life);
+every subsequent request carries it, and each endpoint declares the role it
+requires.
+
+| Role | May do |
+|------|--------|
+| `viewer` | read the network, metrics, overview |
+| `dispatcher` | + run predictions, exports, Copilot |
+| `controller` | + switch the active model, ingest real data |
+| `admin` | + read the audit trail, manage users and roles |
+
+Practical consequences:
+
+* **Passwords are hashed** with PBKDF2-HMAC-SHA256 (280,000 iterations, per-user
+  salt) and stored in `data/users.json` — plaintext passwords are never written.
+  The file is git-ignored.
+* **Brute force is throttled**: five failed attempts lock an account/IP pair out
+  for five minutes, and each failure is recorded in the audit trail.
+* **A never-committed signing key** is generated on first boot into
+  `data/.auth_secret` (or supplied via `SWR_SECRET_KEY`).
+* **Accounts created via "Create Account"** get the lowest operational role
+  (`dispatcher`), never admin. Self-registration can be switched off entirely
+  with `SWR_ALLOW_SELF_REGISTRATION=0`.
+
+You can verify the whole model yourself:
+
+```bash
+python -m pytest tests/test_auth.py tests/test_api.py -v
+```
+
+> ⚠️ The published demo account (`admin` / `swr2026`) exists so the offline demo
+> works out of the box. The server logs a warning on every boot while it is in
+> use — set `SWR_USER`/`SWR_PASS` before any real deployment.
 
 ---
 
@@ -330,8 +369,14 @@ ripple over 3 hops with direction arrows, shaded risk areas, and a live ripple t
 ```
 data_generator.py        → 10,000 synthetic journeys (NTES-style, coupled delays)
 feature_engineering.py   → + graph features + DBSCAN delay clusters  (features.csv)
-train.py                 → trains 10 models + ablations + SHAP-style importance
-inference.py             → CascadePredictor: live prediction + cascade alert
+                           (+ any ingested real observations, with a provenance record)
+train.py                 → 10 models + ablations + SHAP-style importance
+                           + quantile models + conformal calibration
+inference.py             → CascadePredictor: prediction + interval + cascade alert
+uncertainty.py           → quantile regressors, CQR calibration, coverage metrics
+sources/                 → real-data adapters: schema mapping, validation, causes, parity
+auth.py / audit.py       → server-side sessions, roles, append-only audit trail
+model_io.py              → portable model persistence (no version-coupled pickles)
 app.py / copilot.py      → FastAPI backend + AI agent
 dashboard.html           → single-file web app (login, theme, Leaflet map, Copilot)
 ```
@@ -346,11 +391,103 @@ These become ordinary tabular columns, so classical gradient boosting becomes
 
 ### Results (bundled in `results/`)
 
-- **Best single model:** CatBoost, MAE 4.84 min. **Live dashboard model:** Network-Aware
-  Voting Regressor.
-- **Ablation 1** (LightGBM): isolated-only MAE 9.52 → full graph-aware **5.09 min (−46%)**.
-- **Ablation 2** (radius of influence): r1 → r1+r2 → r1+r2+r3 improves steadily but the
-  marginal gain **decays with distance** — the ripple fades.
+Full numbers live in `results/model_metrics.csv`, `ablation_results.csv` and
+`feature_importance.csv`; the figures below are read from those files.
+
+- **Best single model:** CatBoost, MAE **4.85 min** (R² 0.860). **Live dashboard model:**
+  Network-Aware Voting Regressor — XGBoost + LightGBM + Extra Trees over graph features.
+- **Ablation 1** (LightGBM, nested feature sets): isolated-only MAE **9.573** → +static
+  graph 7.834 → +dynamic network 5.730 → full graph-aware **5.119 min (−46.5 %)**. Most of
+  the gain comes from the *dynamic* network state, not the static topology.
+- **Ablation 2** (radius of influence): r1 5.390 → r1+r2 5.283 → r1+r2+r3 **5.140**.
+  Both extra rings help slightly, but the third ring's marginal gain (0.143 min) is **not
+  smaller** than the second's (0.107 min) on this split — with one train/test split and
+  ~2,000 test rows, that ordering is within noise. So the data supports *"the 1-edge ring
+  carries almost all of the signal"* but **not** a claim that the ripple demonstrably decays
+  with distance; that would need repeated splits to establish.
+
+### Uncertainty: you get an interval, not just a number
+
+A point estimate cannot answer *"will it miss the connection?"* — that is a
+threshold question. RailPulse therefore reports **conformalized quantile
+regression** intervals (Romano, Patterson & Candès, 2019):
+
+1. Nine LightGBM quantile regressors (τ = 0.025 … 0.975) model the conditional
+   delay distribution, not just its centre.
+2. A **held-out calibration split** (10 % of the data, never used for fitting)
+   provides the conformity scores `max(q_lo − y, y − q_hi)`.
+3. Each interval is widened by the finite-sample quantile of those scores, which
+   gives the interval a **coverage guarantee** on future data.
+
+Measured on the 2,000-row test split (see `results/uncertainty_metrics.csv`):
+
+| Nominal | Raw quantile coverage | Conformal (CQR) coverage |
+|---------|----------------------|--------------------------|
+| 50 % | 35.9 % ❌ | **51.6 %** ✅ |
+| 80 % | 61.5 % ❌ | **82.7 %** ✅ |
+| 90 % | 75.8 % ❌ | **90.5 %** ✅ |
+| 95 % | 79.8 % ❌ | **94.8 %** ✅ |
+
+Conformal calibration cuts the mean coverage shortfall by **93 %**, and the
+reliability diagram (`results/figures/C1_uncertainty_reliability.png`) plots the
+whole calibration curve against the diagonal. Predictions also carry
+**exceedance probabilities** — `P(delay > 15 / 30 / 60 min)` — derived by
+inverting the predicted quantile function, i.e. the connection-miss risk a
+controller actually acts on. Nine quantiles cannot resolve a tail probability of
+0.999: estimates outside the trained range are clamped to ±0.5 % and named in
+`saturated_thresholds`, so the API says *"≥ 0.995, and here is the limit of what I
+can tell you"* instead of printing `0.99` for every threshold. The response also
+reports whether the point estimate sits inside the calibrated band
+(`consistency.point_inside_model_band`) and, if the band had to be widened to
+contain it, gives the unadjusted bounds alongside.
+
+### Data provenance — what the model was really trained on
+
+No live NTES feed is openly available (NTES has no public API), so the published
+model is trained on a **simulated** delay field. Rather than leave that in a
+footnote, it is recorded in the model bundle and surfaced as a badge in the
+dashboard header; `/system/overview` reports it programmatically.
+
+The moment real data is available, `src/sources/` ingests it. A batch only has to
+identify **three** things — where the train is, how late it is, and how late it
+reached its destination (the label). Everything else is derived from the network
+graph or imputed with a reported default, so a sparse operator export is usable:
+
+```csv
+Station,Train No,Delay,Arrival Delay,To Station,Wx,Sch Time,Day
+Mysuru,12627,45,95,Dharwad,fog,14:05,Mon
+```
+
+A batch with **no** label is refused rather than stored: a live position feed is
+not training data, and scoring it is what `/predict/*` and `/gps/*` are for.
+
+| Step | What happens |
+|------|--------------|
+| **Map** | Operator dialect → canonical schema (`Station`→`current_station`, `Sch Time`→`scheduled_hour`, …) with an override map for unusual exports. A column claimed by two fields (e.g. `Arrival Delay`) is resolved deterministically **and reported** so you can override it |
+| **Normalise** | Station codes/names resolved to graph nodes; hours/days parsed from `14:05`, `7 PM`, `Mon`; missing fields derived from the graph, defaults reported as **imputed**, and a missing delay **never** invented |
+| **Validate** | Railway-plausible bounds (delay ≤ 24 h, hour 0–23, section resolvable and plausible, placement sane, duplicates, completeness) — rejected rows are itemised with the reason, never silently dropped |
+| **Attribute** | Delay **cause heads** (pre-occupied line, rolling stock, engineering/TRT, crew/HOER, signalling, natural, convention) with the department that owns each fix |
+| **Check parity** | Two-sample **KS test** against the training distribution: *is this data even from the world the model learned?* A drift verdict says the reported metrics cannot be expected to transfer |
+| **Record** | Provenance upgrades to `synthetic+real` or `real`, and travels into the next trained bundle |
+
+```bash
+# ingest an operator export, then look at what the causes cost you
+curl -X POST http://127.0.0.1:8000/ingest/upload -H "Authorization: Bearer $TOKEN" \
+     -F "file=@swr_delay_export.csv"
+curl -s http://127.0.0.1:8000/data/causes  -H "Authorization: Bearer $TOKEN"
+curl -s http://127.0.0.1:8000/data/parity  -H "Authorization: Bearer $TOKEN"
+```
+
+### Model persistence that survives upgrades
+
+Estimators are stored in each library's **own** format (XGBoost `.json`,
+LightGBM `.txt`, CatBoost `.cbm`) instead of being pickled, and the dashboard's
+fused ensemble is rebuilt from its components. `train.py` asserts that the
+rebuilt ensemble reproduces the original to within `1e-4` minutes before it will
+publish the bundle (measured difference: **0.0**), and `tests/test_model_io.py`
+re-checks it. Previously the server warned on every boot that the pickled
+XGBoost model came from an older version — that class of silent model drift is
+gone.
 
 ---
 
@@ -362,7 +499,7 @@ If you want to regenerate everything from scratch (data → features → models 
 # from the project root
 python src/data_generator.py        # 1. synthetic data
 python src/feature_engineering.py   # 2. graph features + DBSCAN
-python src/train.py                 # 3. train 10 models + ablations
+python src/train.py                 # 3. train 10 models + ablations + conformal calibration
 python src/visualization.py         # 4. regenerate figures/ charts
 ```
 
@@ -379,8 +516,8 @@ The backend is FastAPI on port 8000.
 |--------|----------|---------|
 | GET | `/` | the web app (dashboard.html) |
 | GET | `/health` | health check (`{"status":"ok",...}`) — used by Render |
-| POST | `/login` | validate credentials |
-| POST | `/register` | create an account (in-memory) |
+| POST | `/login` | exchange credentials for a signed session token |
+| POST | `/register` | create an account (PBKDF2-hashed; lowest role) |
 | GET | `/stations`, `/stations/{name}` | station list / station metadata |
 | GET | `/graph` | full network JSON — nodes (id, code, lat, lon, centralities) + edges |
 | GET | `/system/overview` | active model, network version, dataset sizes |
@@ -398,14 +535,67 @@ The backend is FastAPI on port 8000.
 | GET | `/models` | selectable model menu (top-5) + active model |
 | POST | `/model/select` | switch the active prediction model (`{"model":"CatBoost"}`) |
 
-Example:
+### Authentication, governance and real-data endpoints (new)
+
+| Method | Endpoint | Min role | Purpose |
+|--------|----------|----------|---------|
+| GET | `/auth/config` | public | what auth this deployment expects (no secrets) |
+| GET | `/auth/me` | viewer | validate a token; returns identity + permissions |
+| POST | `/auth/logout` | viewer | ends the session (recorded in the audit trail) |
+| GET | `/admin/audit` | admin | the append-only audit trail (`?limit=&event=&username=`) |
+| GET | `/admin/users` | admin | list accounts and roles |
+| POST | `/admin/users/{username}/role` | admin | change a role (`{"role":"controller"}`) |
+| POST | `/ingest/upload` | controller | ingest an operator export (CSV/Excel) |
+| POST | `/ingest/records` | controller | live-feed webhook (≤ 5,000 JSON records per call) |
+| GET | `/ingest/status` | viewer | what has been ingested + resulting provenance |
+| GET | `/data/causes` | viewer | delay-minutes per cause head, with escalation owner |
+| GET | `/data/parity` | viewer | KS drift test: is the new data like the training world? |
+
+Every operational endpoint returns **401** without a token and **403** if the
+role is insufficient, so the API can be tested for that property directly (see
+`tests/test_api.py`).
+
+The token is accepted over **either** transport — the `Authorization: Bearer`
+header or the `HttpOnly` `railpulse_token` cookie that `/login` also sets — so a
+deployment whose proxy strips headers, or whose embedded frame denies the page
+access to browser storage, still authenticates instead of showing
+"signed in, then 401 everywhere". A 401 says which credential was missing or
+rejected, and the reason is recorded in the audit trail as `auth_rejected`.
+
+Example — the full authenticated flow:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/predict/manual \
+# 1. sign in and capture the token
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/login \
   -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"swr2026"}' | python -c 'import sys,json;print(json.load(sys.stdin)["token"])')
+
+# 2. predict (note the conformal interval and exceedance probabilities)
+curl -s -X POST http://127.0.0.1:8000/predict/manual \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"current_station":"Mysuru","destination":"KSR Bengaluru",
        "train_type":"Superfast","hour":18,"day":"Monday",
-       "weather":"Clear","current_delay_min":45}'
+       "weather":"Clear","current_delay_min":45}' | python -m json.tool
+
+# 3. read the audit trail
+curl -s "http://127.0.0.1:8000/admin/audit?limit=10" \
+  -H "Authorization: Bearer $TOKEN" | python -m json.tool
+```
+
+A prediction response now includes the uncertainty block:
+
+```json
+"uncertainty": {
+  "available": true,
+  "method": "conformalized quantile regression (CQR)",
+  "median": 47.3,
+  "intervals": {
+    "50": {"lower": 38.1, "upper": 52.0, "width": 13.9},
+    "80": {"lower": 31.4, "upper": 58.8, "width": 27.4},
+    "90": {"lower": 27.9, "upper": 63.2, "width": 35.3}
+  },
+  "exceedance": {"p_gt_15min": 0.94, "p_gt_30min": 0.71, "p_gt_60min": 0.18}
+}
 ```
 
 ---
@@ -481,8 +671,7 @@ and the backend. The built-in demo login (`admin` / `swr2026`) is unchanged.
 
 **🧠 Prediction model** — every prediction (manual, batch, GPS tracking) runs on
 the **Network-Aware Voting Regressor** (XGBoost + LightGBM + Extra Trees trained on
-graph-derived features). The **10-model bake-off** (CatBoost 4.84 min MAE,
-GradientBoosting 4.94, NetworkAwareVoting 5.07, LightGBM 5.07, XGBoost 5.11, …)
+graph-derived features). The **10-model bake-off** (CatBoost 4.85, GradientBoosting 5.02, NetworkAwareVoting 5.08, LightGBM 5.14, XGBoost 5.08 min MAE, …)
 remains viewable on the **Analytics** page.
 
 **🚆 Train Number is required** — the Delay Prediction and Live Tracking forms both
