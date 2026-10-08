@@ -559,8 +559,15 @@ The token is accepted over **either** transport — the `Authorization: Bearer`
 header or the `HttpOnly` `railpulse_token` cookie that `/login` also sets — so a
 deployment whose proxy strips headers, or whose embedded frame denies the page
 access to browser storage, still authenticates instead of showing
-"signed in, then 401 everywhere". A 401 says which credential was missing or
-rejected, and the reason is recorded in the audit trail as `auth_rejected`.
+"signed in, then 401 everywhere". The cookie is issued `SameSite=None; Secure`
+over HTTPS so it survives an embedded frame (where a `Lax` cookie counts as
+third-party and is never sent), and `SameSite=Lax` over plain HTTP for local
+development. A 401 says which credential was missing or rejected, and the reason
+is recorded in the audit trail as `auth_rejected`.
+
+Nothing on the dashboard may call an authenticated endpoint before sign-in —
+`tests/boot_probe.mjs` executes the page's real JavaScript in Node and fails if
+any protected route is requested without a session.
 
 Example — the full authenticated flow:
 

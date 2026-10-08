@@ -365,9 +365,24 @@ def login(creds: LoginRequest, request: Request, response: Response):
                         record.get("full_name", ""))
     log_event("login_success", username=record["username"],
               role=record.get("role"), path="/login", status_code=200)
+    # `SameSite=None` is required for the cookie to be sent when the dashboard is
+    # embedded in a frame served from another site (an embedded preview, say):
+    # a `Lax` cookie is treated as third-party there and never sent, which looks
+    # exactly like "logged in, then 401 everywhere". `None` requires `Secure`, so
+    # over plain HTTP (local development) we stay with `Lax`, where it still works
+    # because everything is same-site.
+    # The scheme has to be inferred: behind a proxy the app sees plain HTTP while
+    # the browser is on HTTPS. Check the request, the forwarded header, and the
+    # browser's own `Origin` — any of them saying https means the connection is
+    # secure, and only a Secure cookie may be SameSite=None.
+    secure = (request.url.scheme == "https"
+              or request.headers.get("x-forwarded-proto", "").split(",")[0].strip() == "https"
+              or request.headers.get("origin", "").startswith("https://"))
     response.set_cookie(
         SESSION_COOKIE, token["token"],
-        max_age=TOKEN_TTL_SECONDS, httponly=True, samesite="lax", path="/",
+        max_age=TOKEN_TTL_SECONDS, httponly=True, path="/",
+        samesite="none" if secure else "lax",
+        secure=secure,
     )
     return {
         "success": True,

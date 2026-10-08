@@ -106,7 +106,7 @@ python -m pytest tests/test_pipeline.py -v
 
 ---
 
-## 4. Nine genuine bugs found by probing the running system
+## 4. Eleven genuine bugs found by probing the running system
 
 All were pre-existing defects, found by comparing what the model *learned* with
 what the app *served*, and by driving the running system instead of trusting it.
@@ -252,7 +252,45 @@ that reason is written to the audit trail as `auth_rejected`, and the dashboard
 shows the server's own message instead of a generic "session expired". A failure
 that used to be indistinguishable from a bug is now a one-line diagnosis.
 
-### 4.9 A filename collision silently served one model for nine quantile levels
+### 4.9 The dashboard probed a protected route *before* anyone signed in
+
+The browser log told the whole story: `GET /` → `GET /copilot/status` **401** →
+`GET /auth/config` 200, on every cold load. `loadCopilotStatus()` was called at
+page-load time (module scope), and `/copilot/status` requires the `dispatcher`
+role — so a visitor who had not yet signed in got a 401, the 401 handler fired,
+and the page showed a **"session expired / not authorised"** alarm *before* they
+could type a password. The user saw a scary error on a perfectly healthy app.
+
+It also masked the real cause: with that banner on screen, "the app is broken"
+was a far more natural reading than "sign in".
+
+*Fix:* nothing on the page may call an authenticated endpoint before a session
+exists — `loadCopilotStatus()` now runs from `loadAll()`, i.e. after sign-in. A
+401 only raises the alarm when a session was actually expected, and when there was
+simply no credential the sign-in form is presented without an error.
+
+This failure mode is invisible to curl (which does not execute JavaScript), so it
+is now verified in a real JavaScript engine: `tests/boot_probe.mjs` loads the
+dashboard's actual script into Node against a stub DOM, records every request,
+replays the API's own role gates, and **fails if anything protected is called
+before sign-in**. Against the old code it reproduces the exact two-request
+sequence above; against the fixed code the only request is the public
+`/auth/config`. It runs in CI and as a pytest case.
+
+### 4.10 A `SameSite=Lax` cookie is never sent inside an embedded frame
+
+The session cookie added in 4.8 did not help the preview: it is embedded in a
+frame whose top-level page is another site, so the browser classifies the cookie
+as **third-party** and a `Lax` cookie is neither sent nor kept there — "signed in,
+then 401 on every request", once more, with the login itself returning 200.
+
+*Fix:* the cookie is issued `SameSite=None; Secure` when the request is genuinely
+secure (detected from the scheme, `X-Forwarded-Proto`, or the browser's `Origin`,
+since a proxy hides the real scheme from the app) and stays `SameSite=Lax` over
+plain HTTP, where local development needs no `Secure` flag. The server also runs
+with `--proxy-headers`.
+
+### 4.11 A filename collision silently served one model for nine quantile levels
 
 `Path.with_suffix` **replaces** the last suffix, so `q0.025` + `.txt` became
 `q0.txt`: all nine quantile models were written to one file, and serving loaded

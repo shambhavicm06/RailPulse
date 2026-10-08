@@ -1116,10 +1116,13 @@ function handleUnauthorised(detail){
   $("auth").style.display = "flex";
   const err = $("authErr");
   if(err){
-    err.textContent = "⚠ " + (detail || "Session expired — please sign in again.")
-      + (hadToken
-         ? " (a session token was present but was rejected; try a hard refresh: Ctrl+Shift+R)"
-         : " (no session token was stored in this browser — sign in again)");
+    // No credential at all means the visitor has simply not signed in yet (or the
+    // page was reloaded): that needs the sign-in form, not an error banner that
+    // looks like a fault. A rejected credential is the case worth reporting.
+    err.textContent = hadToken
+      ? "⚠ " + (detail || "Session expired — please sign in again.")
+        + " (a session token was present but was rejected; try a hard refresh: Ctrl+Shift+R)"
+      : "";
   }
   try{ console.warn("[railpulse] unauthorised", {detail, hadToken}); }catch(e){}
 }
@@ -1137,7 +1140,10 @@ async function api(path, opts){
   if(r.status === 401 || r.status === 403){
     let detail = "";
     try{ detail = (await r.clone().json()).detail || ""; }catch(e){}
-    if(path !== "/login"){ handleUnauthorised(detail); }
+    // "Rejected" and "never signed in" are different situations: only the first is
+    // worth alarming the operator about.
+    const wasSignedIn = !!AUTH.get() || !!PRINCIPAL;
+    if(path !== "/login" && wasSignedIn){ handleUnauthorised(detail); }
     const err = new Error(r.status === 403 ? "FORBIDDEN" : "UNAUTHORISED");
     err.detail = detail; err.status = r.status;
     throw err;
@@ -2051,7 +2057,8 @@ async function loadModels(){
 }
 
 async function loadAll(){
-  await Promise.all([loadStations(), loadStatus(), loadModels(), loadAblation(), refreshExports()]);
+  await Promise.all([loadStations(), loadStatus(), loadModels(), loadAblation(),
+                     refreshExports(), loadCopilotStatus()]);
 }
 
 /* ============ PREDICTION ============ */
@@ -2710,7 +2717,10 @@ $("gpsZoomOut").addEventListener("click", () => gpsMap && gpsMap.zoomOut());
 $("gpsFit").addEventListener("click", () => { if(gpsMap && GRAPH) gpsMap.fitBounds(networkBounds(), {padding:[26,26]}); });
 $("regPass").addEventListener("input", updatePassHint);
 renderCopilotChips();
-loadCopilotStatus();
+// NOTE: nothing here may call an authenticated endpoint. `loadCopilotStatus()`
+// used to run at this point and probed a dispatcher-only route, so every page load
+// raised a 401 *before* sign-in and showed a "session expired" alarm. It now runs
+// from loadAll(), i.e. only once a session exists.
 copilotAdd("bot", fmtChat("Hello dispatcher 👋 — I'm your RailPulse Copilot. Ask me about delays, choke points, routes, mitigations or what-if scenarios, and I'll answer from the live network."));
 
 /* Boot: reuse an existing session if the server still accepts its token,

@@ -376,3 +376,27 @@ def test_congestion_proxy_schema_matches_its_consumers():
     table_small = trainer._congestion_proxy_table(
         pd.concat([frame, small.assign(current_station="C")], ignore_index=True))
     assert table_small["per_station"]["C"] == table_small["global"]
+
+
+def test_dashboard_makes_no_authenticated_call_before_sign_in():
+    """The page must not probe protected endpoints while nobody is signed in.
+
+    Regression: `loadCopilotStatus()` ran at page-load time and probed a
+    dispatcher-only route, so *every* cold load returned 401 and the dashboard
+    showed a "session expired" alarm before the user could type a password. This
+    executes the dashboard's real JavaScript in Node against a stub DOM and
+    replays the API's own role gates, so the ordering is verified rather than
+    assumed. Skipped when Node is unavailable (the CI job installs it).
+    """
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    if shutil.which("node") is None:
+        pytest.skip("node is not installed")
+    probe = Path(__file__).parent / "boot_probe.mjs"
+    dashboard = Path(__file__).resolve().parents[1] / "src" / "dashboard.html"
+    result = subprocess.run(["node", str(probe), str(dashboard)],
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "no protected endpoint was called before sign-in" in result.stdout

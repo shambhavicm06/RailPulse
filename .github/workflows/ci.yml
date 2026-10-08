@@ -31,8 +31,16 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      - name: Set up Node (for the dashboard boot probe)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Lint for syntax errors
         run: python -m compileall -q src tests
+
+      - name: Verify the dashboard calls nothing protected before sign-in
+        run: node tests/boot_probe.mjs src/dashboard.html
 
       - name: Run test suite
         env:
