@@ -146,6 +146,16 @@ see the next 30 minutes.
 
 ### P5 — Train-level cascade: rake turnaround & crew duty hours
 
+> **Partly delivered (2026-10-08).** The train-level cascade is live: a
+> reconstructed timetable (`src/timetable.py`) plus an operating-rule conflict
+> engine (`src/conflicts.py`) now answer *"how many and which upcoming trains does
+> this delay affect?"* — `POST /cascade/trains`, the **Affected Trains** panel in
+> the dashboard, and a Copilot tool. Delivered: `FOLLOWING_BLOCK`,
+> `PLATFORM_REGULATION`, `RAKE_TURNAROUND` (the rake half of this pack), with a
+> probability per train from the calibrated quantiles. Still open: **crew duty
+> hours** (needs a crew-linkage model), and single-/double-line attributes that
+> would turn `MEET_REGULATION` from an assumption into a finding.
+
 **Problem.** Only the spatial cascade is modelled. In reality a delayed rake delays the *return
 trip*, and a crew can exceed duty hours long before the train is late enough to notice.
 

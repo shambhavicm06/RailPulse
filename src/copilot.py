@@ -123,6 +123,7 @@ def _llm_config() -> dict | None:
 TOOL_SCHEMA = """[
   {"name":"analyze", "description":"Full delay analysis for a station: predicted delay, cascade ripple and mitigations.",
    "args":{"current_station":"str","destination":"str?","train_type":"str?","hour":"int?","day":"str?","weather":"str?","current_delay_min":"int?"}},
+  {"name":"affected_trains", "description":"Which UPCOMING TRAINS a delay will affect: how many, which ones, where, expected added delay and probability. Use whenever the question asks who else is held up by a delay.","args":{"current_station":"str","destination":"str?","current_delay_min":"int?","train_type":"str?","hour":"int?","day":"str?","weather":"str?","horizon_min":"int?"}},
   {"name":"choke", "description":"Rank junctions/stations most likely to choke first (by betweenness).","args":{"k":"int?"}},
   {"name":"route", "description":"Shortest rail route between two stations.","args":{"origin":"str","destination":"str"}},
   {"name":"station", "description":"Info about one station: degree, centralities, connected stations.","args":{"name":"str"}},
@@ -182,6 +183,12 @@ class DispatcherCopilot:
         # what-if
         if re.search(r"what\s*[- ]?if|simulate|hold .* for", message.lower()):
             return self._answer_whatif(q, message)
+
+        # affected trains — asked before generic analysis, because "which trains"
+        # is a different question from "how late will this one be"
+        if re.search(r"which (other )?trains?|how many trains?|affected trains?|"
+                     r"who else|held up|hold up|knock[- ]?on trains?", message.lower()):
+            return self._answer_affected_trains(q, message)
 
         # two stations + route wording
         route_words = ("route", "path", "between", "distance", "from ", " to ", "via")
@@ -347,6 +354,41 @@ class DispatcherCopilot:
                  f"Connected to ({len(nbrs)}): {', '.join(nbrs[:12])}{'…' if len(nbrs) > 12 else ''}")
         return {"reply": reply, "mode": self._mode(), "tools_used": ["station"]}
 
+    def _answer_affected_trains(self, q, message) -> dict:
+        """Prose answer for "which trains does this delay affect?"."""
+        stations = q["stations"]
+        if not stations:
+            return {"reply": "Tell me the station where the train is delayed "
+                             "(and ideally its destination).",
+                    "mode": self._mode(), "tools_used": []}
+        src = self._resolve(stations[0])
+        dest = self._resolve(stations[1]) if len(stations) > 1 else src
+        delay = q.get("delay") or 30
+        result = self._run_tool("affected_trains", {
+            "current_station": src, "destination": dest,
+            "current_delay_min": delay, "train_type": q.get("train_type", "Express"),
+            "hour": q.get("hour", 14), "day": q.get("day", "Monday"),
+            "weather": q.get("weather", "Clear")})["summary"]
+        data = json.loads(result)
+        window = data["window"]
+        rows = data["trains"]
+        reply = (f"With {delay:.0f} min delay at {src} (to {dest}), "
+                 f"**{data['affected_count']} trains** are forecast to be affected "
+                 f"between {window}.\n\n")
+        if rows:
+            reply += "\n".join(
+                f"• **{r['train']}** — {r['kind'].replace('_', ' ').lower()} at "
+                f"{r['where']} from {r['from']}: **+{r['added_delay_min']} min** "
+                f"(P(>15 min) {r['p_over_15min']*100:.0f}%)" for r in rows[:6])
+            if data["affected_count"] > len(rows):
+                reply += f"\n…and {data['affected_count'] - len(rows)} more."
+        else:
+            reply += "No other train is forecast to be affected inside that window."
+        reply += ("\n\n_Schedules are reconstructed from the journey record and the "
+                  "operating rules are stated assumptions — see the Affected Trains "
+                  "panel for the full list._")
+        return {"reply": reply, "mode": self._mode(), "tools_used": ["affected_trains"]}
+
     def _answer_whatif(self, q, message) -> dict:
         src = q["stations"][0] if q["stations"] else None
         hold = q["stations"][1] if len(q["stations"]) > 1 else src
@@ -450,6 +492,42 @@ class DispatcherCopilot:
                                     "delay": int(args.get("current_delay_min", 0)),
                                     "pred": pred["predicted_destination_arrival_delay_min"], "level": pred["alert"]["level"]}}
             return {"summary": summary, "extra": extra}
+        if tool == "affected_trains":
+            from conflicts import affected_trains
+            from timetable import load_timetable
+
+            q = self._parse(" ".join(str(v) for v in args.values()))
+            stations = q["stations"] or []
+            src = args.get("current_station") or (stations[0] if stations else None)
+            if not src:
+                return {"summary": "No station identified.", "extra": {}}
+            src = self._resolve(src)
+            dest = args.get("destination") or (stations[1] if len(stations) > 1 else None)
+            dest = self._resolve(dest) if dest else src
+            delay = float(args.get("current_delay_min") or q.get("delay") or 30)
+            result = affected_trains(
+                predictor=self.p, current_station=src, destination=dest,
+                train_type=args.get("train_type", "Express"),
+                hour=int(args.get("hour") or q.get("hour") or 14),
+                day=args.get("day", "Monday"), weather=args.get("weather", "Clear"),
+                current_delay_min=delay,
+                train_number=args.get("train_number"),
+                horizon_min=float(args.get("horizon_min", 120)),
+                timetable=load_timetable())
+            top = result["affected_trains"][:6]
+            summary = json.dumps({
+                "from": src, "to": dest, "delay_min": delay,
+                "affected_count": result["affected_count"],
+                "by_severity": result["by_severity"], "by_kind": result["by_kind"],
+                "window": result["horizon"]["analysed_from"] + "–"
+                          + result["horizon"]["analysed_until"],
+                "trains": [{"train": t["train_id"], "kind": t["kind"],
+                            "where": t["where"], "from": t["when"],
+                            "added_delay_min": t["expected_added_delay_min"],
+                            "p_over_15min": t["p_over_15min"]} for t in top],
+                "caveat": "schedules are reconstructed; operating rules are assumptions",
+            })
+            return {"summary": summary, "extra": {}}
         if tool == "choke":
             k = int(args.get("k", 5))
             ranked = sorted(self.G.nodes(), key=lambda n: self.cent.get(n, {}).get("betweenness_centrality", 0), reverse=True)[:k]

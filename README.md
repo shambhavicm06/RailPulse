@@ -441,6 +441,67 @@ reports whether the point estimate sits inside the calibrated band
 (`consistency.point_inside_model_band`) and, if the band had to be widened to
 contain it, gives the unadjusted bounds alongside.
 
+### Which trains does this delay actually affect?
+
+A forecast answers "how late will this train be?". The dispatcher's next question
+is *"and who else does that hold up?"* — so RailPulse reconstructs a **timetable**
+from the journey record and reasons over it with explicit operating rules.
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/cascade/trains \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"current_station":"Mysuru","destination":"KSR Bengaluru",
+       "train_type":"Superfast","hour":18,"day":"Monday",
+       "current_delay_min":45,"horizon_min":120}' | python -m json.tool
+```
+
+```json
+{
+  "delayed_train": {"at": "Mysuru", "destination": "KSR Bengaluru",
+                    "current_delay_min": 45, "predicted_destination_delay_min": 78,
+                    "arrives_destination_hour": "21:48"},
+  "affected_count": 8,
+  "by_severity": {"severe": 0, "moderate": 4, "minor": 4},
+  "by_kind": {"FOLLOWING_BLOCK": 7, "PLATFORM_REGULATION": 1},
+  "horizon": {"minutes": 120, "analysed_from": "18:40", "analysed_until": "20:45",
+              "day_name": "Monday", "candidates_considered": 40},
+  "affected_trains": [
+    {"train_id": "TRN07926", "train_type": "Superfast", "kind": "FOLLOWING_BLOCK",
+     "where": "Maddur → Channapatna", "when": "19:50",
+     "expected_added_delay_min": 14.2, "p_over_15min": 0.52, "severity": "moderate",
+     "reason": "TRN07926 trails the delayed train into the Maddur–Channapatna block and cannot enter until it clears (+3 min headway).",
+     "assumed": false}
+  ]
+}
+```
+
+Four conflict classes, in decreasing confidence:
+
+| Kind | Rule | Depends on |
+|------|------|-----------|
+| `FOLLOWING_BLOCK` | B cannot enter a section until the delayed train clears it, plus headway | timetable + headway |
+| `PLATFORM_REGULATION` | both trains reach the same station inside a platform window | timetable + berth window |
+| `RAKE_TURNAROUND` | B departs from where the delayed train terminates, inside the turn-around buffer | timetable + stock rotation |
+| `MEET_REGULATION` | head-on crossing inside one section | **a single-line section — assumed, and off by default** |
+
+The delay each affected train absorbs is a **distribution**, not a number: the
+delayed train's calibrated quantiles are propagated to every downstream station
+and the hold is evaluated per sample, so a row can read "+14 min,
+P(> 15 min) = 52%" — which is what a regulation decision actually needs.
+
+**What this claim rests on, stated plainly.** The dataset stores one snapshot per
+train, so the timetable is *reconstructed*: paths come from network routing, and
+run times from assumed commercial speeds per service type
+(`src/timetable.py`, reported in every response). The operating rules (3-min
+headway, 5-min platform window, 25-min turn-around buffer, 60 % of a hold
+assumed recovered downstream) are stated assumptions in `src/conflicts.py`.
+Other trains are assumed to run to their scheduled times. The mechanism is real
+railway logic; the magnitudes are only as good as the simulated schedule they run
+on — so treat this as a demonstration of the method, not a punctuality forecast
+for South Western Railway. Meets are excluded unless you pass
+`include_meets: true`, and are flagged `assumed` when you do, because the network
+carries no single-/double-line attribute.
+
 ### Data provenance — what the model was really trained on
 
 No live NTES feed is openly available (NTES has no public API), so the published
@@ -524,6 +585,7 @@ The backend is FastAPI on port 8000.
 | GET | `/model/metrics` | 10-model bake-off |
 | GET | `/history` | recent predictions |
 | POST | `/predict/manual` | single prediction (JSON body) |
+| POST | `/cascade/trains` | which upcoming trains a delay affects, with expected added delay |
 | POST | `/predict/upload` | CSV upload → batch predictions + export id |
 | GET | `/demo/records` | pre-canned scenarios |
 | GET | `/exports`, `/export/{id}` | list / download exports |

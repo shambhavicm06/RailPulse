@@ -380,3 +380,47 @@ def test_diagnostics_works_without_any_credential(client):
     assert body["carriers"] == {
         "authorization_header": False, "custom_header": False,
         "session_cookie": False, "query_token": False}
+
+
+# ---------------------------------------------------------------------------
+# Affected trains
+# ---------------------------------------------------------------------------
+def test_cascade_trains_requires_a_dispatcher(client, dispatcher_headers):
+    assert client.post("/cascade/trains", json={
+        "current_station": "Mysuru", "destination": "KSR Bengaluru"}).status_code == 401
+
+    body = client.post("/cascade/trains", headers=dispatcher_headers, json={
+        "current_station": "Mysuru", "destination": "KSR Bengaluru",
+        "train_type": "Superfast", "hour": 18, "day": "Monday",
+        "weather": "Clear", "current_delay_min": 45, "horizon_min": 120}).json()
+
+    assert body["affected_count"] == len(body["affected_trains"])
+    assert body["delayed_train"]["at"] == "Mysuru"
+    assert body["delayed_train"]["destination"] == "KSR Bengaluru"
+    assert set(body["by_severity"]) == {"severe", "moderate", "minor"}
+    assert body["horizon"]["day_name"] == "Monday"
+    # The response must carry the assumptions it rests on, not just the numbers.
+    assert body["rule_set"]["headway_min"] > 0
+    assert "caveat" in body["assumptions"]
+    for row in body["affected_trains"]:
+        assert set(row) >= {"train_id", "kind", "where", "when",
+                            "expected_added_delay_min", "p_over_15min",
+                            "severity", "reason", "assumed"}
+        assert row["reason"], "every finding must explain itself"
+
+
+def test_cascade_trains_rejects_an_unknown_station(client, dispatcher_headers):
+    response = client.post("/cascade/trains", headers=dispatcher_headers, json={
+        "current_station": "Neverwas", "destination": "Mysuru"})
+    assert response.status_code == 404
+
+
+def test_cascade_trains_is_audited(client, admin_headers):
+    client.post("/cascade/trains", headers=admin_headers, json={
+        "current_station": "Mysuru", "destination": "KSR Bengaluru",
+        "current_delay_min": 30})
+    trail = client.get("/admin/audit?event=affected_trains&limit=20",
+                       headers=admin_headers).json()
+    assert trail["entries"], "the analysis must be recorded in the audit trail"
+    detail = trail["entries"][-1]["detail"]
+    assert "affected" in detail and "station" in detail

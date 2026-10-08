@@ -53,8 +53,14 @@ function element() {
   });
 }
 
+const ELEMENTS = new Map();
+const byId = (id) => {
+  if (!ELEMENTS.has(id)) ELEMENTS.set(id, Object.assign(element(), { id }));
+  return ELEMENTS.get(id);
+};
+
 const documentStub = {
-  getElementById: () => element(),
+  getElementById: byId,
   querySelector: () => element(),
   querySelectorAll: () => [],
   createElement: () => element(),
@@ -87,6 +93,7 @@ globalThis.fetch = async (url, opts = {}) => {
   }
   const body = path === "/login"
     ? { success: true, token: "v1.test", role: "admin", full_name: "Dispatcher" }
+    : path === "/cascade/trains" ? AFFECTED_FIXTURE
     : path === "/auth/config" ? { enabled: true, default_demo_account_active: true }
     : path.endsWith(".csv") ? "a,b\n1,2" : {};
   return {
@@ -123,18 +130,44 @@ globalThis.Blob = class { constructor() {} };
 globalThis.FileReader = class { readAsText() {} };
 globalThis.speechSynthesis = undefined;
 
+const AFFECTED_FIXTURE = {
+  delayed_train: { at: "Mysuru", destination: "KSR Bengaluru",
+                   current_delay_min: 45, predicted_destination_delay_min: 78 },
+  affected_count: 2,
+  by_severity: { severe: 1, moderate: 1, minor: 0 },
+  by_kind: { FOLLOWING_BLOCK: 2 },
+  assumed_conflicts: 0,
+  horizon: { minutes: 120, analysed_from: "18:40", analysed_until: "20:45",
+             day_name: "Monday", candidates_considered: 40, trains_in_timetable: 10000 },
+  rule_set: { headway_min: 3, platform_window_min: 5, turnaround_buffer_min: 25,
+              recovery_factor: 0.6 },
+  assumptions: { caveat: "rebuildable test fixture", probability_note: "test" },
+  affected_trains: [
+    { train_id: "TRN07926", train_type: "Superfast", kind: "FOLLOWING_BLOCK",
+      where: "Maddur -> Channapatna", when: "19:50", expected_added_delay_min: 14.2,
+      p_over_15min: 0.52, severity: "severe", reason: "trails the delayed train",
+      assumed: false },
+    { train_id: "TRN03356", train_type: "Superfast", kind: "FOLLOWING_BLOCK",
+      where: "Channapatna -> Ramanagara", when: "20:25", expected_added_delay_min: 13.0,
+      p_over_15min: 0.32, severity: "moderate", reason: "holds for the block",
+      assumed: false },
+  ],
+};
+
 // --- load the dashboard's inline script -------------------------------------
 const html = readFileSync(process.argv[2] || "src/dashboard.html", "utf8");
 const blocks = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)];
 if (!blocks.length) { console.error("no inline script found"); process.exit(1); }
 
 const failures = [];
-const finish = () => {
-  const before = calls.filter(c => !c.path.startsWith("/static") && c.path !== "/login");
+const finish = (bootCalls) => {
+  // Only the cold-boot requests matter for the ordering rule; the panel check
+  // deliberately issues an authenticated call *after* boot.
+  const before = bootCalls.filter(c => !c.path.startsWith("/static") && c.path !== "/login");
   const protectedBeforeSignIn = before.filter(c =>
     PROTECTED.has(c.path) || [...PROTECTED].some(p => c.path.startsWith(p + "/")));
 
-  console.log(`requests during cold boot: ${calls.length}`);
+  console.log(`requests during cold boot: ${bootCalls.length}`);
   for (const c of calls) console.log(`   ${c.path}${c.credential ? "  [credential]" : ""}`);
 
   if (protectedBeforeSignIn.length) {
@@ -151,11 +184,42 @@ const finish = () => {
   console.log("PASS: cold boot issues no authenticated request");
 };
 
+async function panelChecks() {
+  const api = globalThis.__railpulse;
+  if (!api) { failures.push("the page did not expose its internals to the probe"); return; }
+
+  // Signed in, then ask for the affected-trains panel exactly as predict() does.
+  api.AUTH.set("v1.test");
+  signedIn = true;
+  await api.loadAffectedTrains({ current_station: "Mysuru", destination: "KSR Bengaluru",
+                                 train_type: "Superfast", hour: 18, day: "Monday",
+                                 weather: "Clear", current_delay_min: 45 });
+  const html = byId("affectedTrains").innerHTML || "";
+  if (!html.includes("AFFECTED TRAINS")) failures.push("panel did not render a heading");
+  if (!html.includes("2 in the next 120 min")) failures.push("panel did not show the count");
+  if (!html.includes("TRN07926") || !html.includes("TRN03356"))
+    failures.push("panel did not list the affected trains");
+  if (!html.includes("+14.2 min")) failures.push("panel did not show the expected delay");
+  if (!html.includes("52%")) failures.push("panel did not show the exceedance probability");
+  if (!html.includes("18:40")) failures.push("panel did not show the analysis window");
+  if (!html.includes("Operating assumptions"))
+    failures.push("panel did not disclose the assumptions it rests on");
+  if (html.includes("undefined")) failures.push("panel rendered 'undefined' somewhere");
+  if (!failures.some(f => f.startsWith("panel")))
+    console.log(`PASS: affected-trains panel rendered (${html.length} chars of markup)`);
+}
+
 try {
   // Execute the page script; top-level statements run immediately (as in a browser).
-  new Function(blocks[0][1])();
-  // The boot() IIFE is async — give its microtasks a turn to settle.
-  setTimeout(finish, 400);
+  // Expose the internals at the end so the probe can drive them like a user would.
+  new Function(blocks[0][1] +
+    "\n;globalThis.__railpulse = { loadAffectedTrains, renderAffectedTrains, AUTH };")();
+  // The boot() IIFE is async — give its microtasks a turn, then drive the panel.
+  setTimeout(async () => {
+    const bootCalls = calls.slice();      // what the page did on its own
+    await panelChecks();                  // then what the panel does when asked
+    finish(bootCalls);
+  }, 400);
 } catch (error) {
   console.error("script failed to execute:", error.message);
   process.exit(1);

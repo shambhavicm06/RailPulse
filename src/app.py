@@ -30,7 +30,8 @@ from auth import (ROLES, Principal, auth_status, authenticate, hash_password,
                   require_viewer, throttle, users)
 from auth import SESSION_COOKIE, TOKEN_TTL_SECONDS
 from config import (ALLOW_SELF_REGISTRATION, ALLOWED_ORIGINS, AUTH_PASS, AUTH_USER,
-                    DATA_DIR, EXPORTS_DIR, PROVENANCE_LABELS, RESULTS_DIR, ROOT)
+                    DATA_DIR, DAY_ENC, EXPORTS_DIR, PROVENANCE_LABELS, RESULTS_DIR,
+                    ROOT)
 from graph_utils import path_distance_km, shortest_path_km
 from inference import CascadePredictor
 from station_codes import station_code as _station_code
@@ -184,6 +185,19 @@ def tile_esri_dark_ref(z: int, y: int, x: int):
 
 predictor = CascadePredictor()
 
+# Warm the caches the first request would otherwise pay for: loading the
+# reconstructed timetable (10k trains) and importing the conflict engine takes a
+# couple of seconds on a cold process, which a dispatcher would feel as a slow
+# first "which trains are affected?" click.
+try:
+    from timetable import load_timetable as _warm_timetable
+    _warm_timetable()
+    import conflicts as _warm_conflicts  # noqa: F401
+    print(f"[startup] timetable ready: "
+          f"{len(predictor.G)} stations, schedule cache loaded")
+except Exception as _exc:  # noqa: BLE001 - never block startup over a cache
+    print(f"[startup] timetable warm-up skipped: {_exc}")
+
 # Dispatcher Copilot — natural-language agent over the live predictor/graph.
 from copilot import DispatcherCopilot  # noqa: E402
 
@@ -245,6 +259,21 @@ class ManualRequest(BaseModel):
     current_delay_min: float = 0.0
     model: Optional[str] = None
 
+
+
+class AffectedTrainsRequest(BaseModel):
+    """Inputs for the affected-trains analysis (same shape as a manual prediction)."""
+    current_station: str
+    destination: Optional[str] = None
+    train_type: str = "Express"
+    train_number: Optional[str] = None
+    hour: int = 14
+    day: str = "Monday"
+    weather: str = "Clear"
+    current_delay_min: float = 30.0
+    horizon_min: float = 120.0
+    include_meets: bool = False
+    max_trains: int = 25
 
 
 class RegisterRequest(BaseModel):
@@ -631,6 +660,43 @@ def predict_manual(req: ManualRequest,
     })
     HISTORY[:] = HISTORY[-50:]
     _audit_prediction("manual", req.model_dump(), result, principal)
+    return result
+
+
+@app.post("/cascade/trains")
+def cascade_trains(req: AffectedTrainsRequest,
+                   principal: Principal = Depends(require_dispatcher)):
+    """Which upcoming trains a delay is expected to affect, and by how much.
+
+    The companion to `/predict/manual`: that endpoint says how late *this* train
+    will be, this one says who else it holds up, how many, and where. Every
+    affected train carries an expected added delay and the probability it exceeds
+    15 minutes, propagated from the delayed train's own calibrated quantiles.
+    """
+    from conflicts import affected_trains
+    from timetable import load_timetable
+
+    if req.current_station not in predictor.G:
+        raise HTTPException(404, f"Unknown station '{req.current_station}'")
+    destination = req.destination or req.current_station
+    result = affected_trains(
+        predictor=predictor, current_station=req.current_station,
+        destination=destination, train_type=req.train_type,
+        hour=int(req.hour) % 24, day=DAY_ENC.get(req.day, 0), weather=req.weather,
+        current_delay_min=float(req.current_delay_min),
+        train_number=req.train_number,
+        horizon_min=float(req.horizon_min), max_trains=int(req.max_trains),
+        include_meets=bool(req.include_meets),
+        timetable=load_timetable(),
+    )
+    try:
+        log_event("affected_trains", username=principal.username, role=principal.role,
+                  path="/cascade/trains", status_code=200,
+                  detail={"station": req.current_station, "delay_min": req.current_delay_min,
+                          "affected": result["affected_count"],
+                          "horizon_min": req.horizon_min})
+    except Exception:  # noqa: BLE001 - auditing must not break the response
+        pass
     return result
 
 

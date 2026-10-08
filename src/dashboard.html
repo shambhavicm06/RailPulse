@@ -292,6 +292,11 @@ details .inner{padding:6px 18px 16px; overflow:auto;}
 
 /* ============================ TABLES ============================ */
 table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px;}
+/* Denser table for the affected-trains and trace listings: more rows on screen. */
+table.mini{font-size:12.5px;}
+table.mini th{padding:5px 8px; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;}
+table.mini td{padding:5px 8px;}
+table.mini tr:hover td{background:rgba(127,127,127,.07);}
 th{
   color:var(--mut); text-align:left; padding:11px 12px;
   border-bottom:2px solid var(--line); background:var(--surface-2);
@@ -809,6 +814,8 @@ a.leaflet-popup-close-button{ color:var(--mut) !important; }
           </div>
 
           <div id="alert"><div class="empty"><span class="big">🛤</span>No prediction yet.<br>Fill in the train details above and click <b>Run Cascade Prediction</b> to begin.</div></div>
+
+          <div id="affectedTrains"></div>
 
           <div class="grid" style="grid-template-columns:1fr 1fr;">
             <div class="panel-box"><h3>ROUTE DETAILS</h3><div id="routeDetails" class="muted"></div></div>
@@ -2162,6 +2169,9 @@ async function predict(){
   try{
     const res = await api("/predict/manual", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
     renderResult(res);
+    if(payload.destination){ loadAffectedTrains(payload); }
+    else{ $("affectedTrains").innerHTML = `<div class="panel-box" style="margin-top:14px;"><h3>AFFECTED TRAINS</h3>
+      <p class="muted">Choose a destination to see which other trains this delay will affect.</p></div>`; }
   }catch(e){
     $("alert").innerHTML = `<div class="alert critical"><h2 style="color:var(--red)">⚠ ERROR</h2><p>${esc(e.message)}</p></div>`;
   }
@@ -2212,6 +2222,95 @@ function renderUncertainty(u, point){
         <span>${esc(u.coverage_note || "")}</span>
       </div>
     </div>`;
+}
+
+/* ---------------------------------------------------------------------------
+   Affected trains.
+
+   The cascade model answers "how late will this train be?"; this panel answers
+   the dispatcher's follow-up: "and who else does that hold up?". Trains are
+   matched on the reconstructed timetable and judged against explicit operating
+   rules (block headway, platform window, turn-around buffer). Each row carries an
+   expected added delay and P(> 15 min), propagated from the delayed train's own
+   calibrated quantiles.
+   --------------------------------------------------------------------------- */
+let LAST_AFFECTED_PAYLOAD = null;
+let AFFECTED_HORIZON = 120;
+
+function severityChip(kind, n){
+  const colour = {severe:"var(--red)", moderate:"var(--orange)", minor:"var(--neon)"}[kind];
+  return `<span class="riskchip ${kind === "severe" ? "hot" : kind === "moderate" ? "mid" : "cool"}"
+                style="margin-right:6px;">${kind} ${n}</span>`;
+}
+function renderAffectedTrains(data){
+  const d = data.delayed_train || {}, h = data.horizon || {};
+  const rows = data.affected_trains || [];
+  const sev = data.by_severity || {};
+  const kinds = Object.entries(data.by_kind || {})
+    .map(([k, n]) => `${k.replace(/_/g, " ").toLowerCase()} ${n}`).join(" · ") || "none";
+
+  const table = rows.length ? `
+    <table class="mini">
+      <tr><th>Train</th><th>Type</th><th>What happens</th><th>Where</th><th>From</th>
+          <th>Added delay</th><th>P(&gt;15 min)</th></tr>
+      ${rows.map(r => `<tr>
+        <td><b>${esc(r.train_id)}</b>${r.assumed ? ' <span class="muted" title="depends on an assumed single-line section">~</span>' : ""}</td>
+        <td>${esc(r.train_type)}</td>
+        <td>${esc(r.kind.replace(/_/g, " ").toLowerCase())}</td>
+        <td>${esc(r.where)}</td>
+        <td>${esc(r.when)}</td>
+        <td><b style="color:${r.severity === "severe" ? "var(--red)" : r.severity === "moderate" ? "var(--orange)" : "inherit"};">+${r.expected_added_delay_min} min</b></td>
+        <td>${(r.p_over_15min * 100).toFixed(0)}%</td>
+      </tr>`).join("")}
+    </table>` : `<p class="muted">No other train is forecast to be affected inside this window.</p>`;
+
+  const firstReason = rows.length ? rows[0].reason : "";
+  return `
+    <div class="panel-box" style="margin-top:14px;">
+      <h3>AFFECTED TRAINS — ${data.affected_count} in the next ${h.minutes} min</h3>
+      <p class="muted" style="margin-top:0;">
+        Window <b>${esc(h.analysed_from)}–${esc(h.analysed_until)}</b> ${esc(h.day_name || "")}
+        · ${h.candidates_considered} trains assessed · ${h.trains_in_timetable} in the timetable
+        ${data.assumed_conflicts ? ` · <span title="requires an assumed single-line section">${data.assumed_conflicts} assumed</span>` : ""}
+      </p>
+      <div style="margin:8px 0;">
+        ${Object.entries(sev).map(([k, n]) => n ? severityChip(k, n) : "").join("")}
+      </div>
+      <p class="muted" style="margin:4px 0 10px;">${esc(kinds)}</p>
+      ${table}
+      ${firstReason ? `<p class="muted" style="margin-top:10px;"><b>Why:</b> ${esc(firstReason)}</p>` : ""}
+      <details style="margin-top:10px;">
+        <summary class="muted" style="cursor:pointer;">Operating assumptions behind these numbers</summary>
+        <ul class="muted" style="margin:8px 0 0 18px;">
+          <li>Other trains are assumed to be running to their scheduled times; only this train is delayed.</li>
+          <li>Headway ${esc(String((data.rule_set||{}).headway_min))} min, platform window ${esc(String((data.rule_set||{}).platform_window_min))} min,
+              turn-around buffer ${esc(String((data.rule_set||{}).turnaround_buffer_min))} min,
+              ${Math.round(((data.rule_set||{}).recovery_factor||0)*100)}% of a hold is assumed recovered downstream.</li>
+          <li>Schedules are reconstructed from the journey record with assumed commercial speeds
+              (${esc((data.assumptions||{}).caveat || "")}).</li>
+          <li>${esc(((data.assumptions||{}).probability_note) || "")}</li>
+        </ul>
+      </details>
+    </div>`;
+}
+
+async function loadAffectedTrains(payload, horizon){
+  const box = $("affectedTrains");
+  if(!box) return;
+  if(horizon) AFFECTED_HORIZON = horizon;
+  LAST_AFFECTED_PAYLOAD = payload;
+  box.innerHTML = `<div class="panel-box" style="margin-top:14px;"><h3>AFFECTED TRAINS</h3>
+    <p class="muted">Checking the timetable for trains this delay will hold up…</p></div>`;
+  try{
+    const body = Object.assign({}, payload, {horizon_min: AFFECTED_HORIZON});
+    delete body.model;
+    const data = await api("/cascade/trains",
+      {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+    box.innerHTML = renderAffectedTrains(data);
+  }catch(e){
+    box.innerHTML = `<div class="panel-box" style="margin-top:14px;"><h3>AFFECTED TRAINS</h3>
+      <p class="muted">Could not analyse affected trains (${esc(e.detail || e.message)}).</p></div>`;
+  }
 }
 
 function renderResult(res){
