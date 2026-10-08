@@ -7,6 +7,8 @@ endpoint rejects anonymous callers, role requirements are enforced server-side
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -321,3 +323,60 @@ def test_foreign_origin_preflight_is_not_reflected(client):
         "Origin": "https://evil.example.com",
         "Access-Control-Request-Method": "POST"})
     assert r.headers.get("access-control-allow-origin") in (None, "")
+
+
+# ---------------------------------------------------------------------------
+# Credential carriers
+#
+# A browser in a third-party frame may lose either standard carrier: a proxy can
+# strip `Authorization`, and a session cookie is refused when it counts as
+# third-party. The token must therefore survive on any one of four carriers.
+# ---------------------------------------------------------------------------
+def _fresh_token(client) -> str:
+    return client.post("/login", json={"username": "admin",
+                                       "password": "swr2026"}).json()["token"]
+
+
+@pytest.mark.parametrize("carrier", ["header", "custom_header", "cookie", "query"])
+def test_each_credential_carrier_authenticates_alone(client, carrier):
+    token = _fresh_token(client)
+    headers, params = {}, {}
+    if carrier == "header":
+        headers["Authorization"] = f"Bearer {token}"
+    elif carrier == "custom_header":
+        headers["X-RailPulse-Token"] = token
+    elif carrier == "cookie":
+        headers["Cookie"] = f"{SESSION_COOKIE}={token}"
+    else:
+        params["token"] = token
+    response = client.get("/stations", headers=headers, params=params)
+    assert response.status_code == 200, f"{carrier} failed: {response.text[:200]}"
+
+
+def test_every_carrier_absent_still_401(client):
+    """Accepting extra carriers must not weaken the gate."""
+    assert client.get("/stations").status_code == 401
+    assert client.get("/stations", headers={"X-RailPulse-Token": "garbage"}).status_code == 401
+    assert client.get("/stations", params={"token": "garbage"}).status_code == 401
+
+
+def test_diagnostics_reports_received_carriers_without_leaking(client):
+    token = _fresh_token(client)
+    body = client.get("/auth/diagnostics",
+                      headers={"X-RailPulse-Token": token,
+                               "Authorization": f"Bearer {token}"}).json()
+    assert body["carriers"]["authorization_header"] is True
+    assert body["carriers"]["custom_header"] is True
+    assert body["carriers"]["session_cookie"] is True
+    # The report is public, so it must never echo token material.
+    serialised = json.dumps(body)
+    assert token not in serialised
+    assert "railpulse_token=v1" not in serialised
+
+
+def test_diagnostics_works_without_any_credential(client):
+    """It is the endpoint a client reaches for *because* it cannot authenticate."""
+    body = client.get("/auth/diagnostics").json()
+    assert body["carriers"] == {
+        "authorization_header": False, "custom_header": False,
+        "session_cookie": False, "query_token": False}

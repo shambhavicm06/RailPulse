@@ -357,15 +357,47 @@ def _bearer(authorization: Optional[str]) -> Optional[str]:
     return None
 
 
+#: A non-standard header carrying the same signed token. Some hosting layers
+#: strip ``Authorization`` (it can leak credentials to upstream services) while
+#: leaving unknown headers alone, so the dashboard sends both and the server
+#: accepts either.
+TOKEN_HEADER = "x-railpulse-token"
+
+
+def _token_carriers(request: Request,
+                    authorization: Optional[str]) -> dict:
+    """Every place a token may arrive from, most reliable first.
+
+    A browser in a third-party frame cannot be relied on for either standard
+    carrier: ``Authorization`` may be stripped by a proxy middleware, and a
+    session cookie is refused outright when it counts as third-party. Accepting
+    several carriers costs nothing and makes the deployment work wherever it is
+    hosted; the token itself is identical in all of them.
+    """
+    custom = request.headers.get(TOKEN_HEADER)
+    if custom and custom.lower().startswith("bearer "):
+        custom = custom.split(None, 1)[1]
+    query = request.query_params.get("token") or request.query_params.get("_t")
+    ordered = (
+        ("header", _bearer(authorization)),
+        ("custom_header", custom),
+        ("cookie", request.cookies.get(SESSION_COOKIE)),
+        ("query", query),
+    )
+    for source, value in ordered:
+        if value:
+            return {"source": source, "token": value}
+    return {"source": "none", "token": None}
+
+
 def current_user(request: Request,
                  authorization: Optional[str] = Header(default=None)) -> Principal:
     """Resolve the caller. Public endpoints may still want the identity."""
     if not AUTH_ENABLED:
         return Principal(username="anonymous-auth-disabled", role="admin",
                          full_name="Auth disabled")
-    header_token = _bearer(authorization)
-    cookie_token = request.cookies.get(SESSION_COOKIE)
-    token = header_token or cookie_token
+    carriers = _token_carriers(request, authorization)
+    token = carriers["token"]
     principal = decode_token(token) if token else None
     if principal is None:
         # Say *why*: "no credential arrived at all" and "a credential arrived but
@@ -373,13 +405,19 @@ def current_user(request: Request,
         # different causes (a proxy stripping headers or a frame blocking storage,
         # versus a genuinely expired session). The reason is also recorded in the
         # audit trail so a failure can be diagnosed after the fact.
-        source = ("header" if header_token else "cookie" if cookie_token else "none")
+        source = carriers["source"]
         detail = {
-            "none": "No session credential arrived with this request. Sign in again; "
-                    "if this repeats, the hosting layer may be dropping headers.",
+            "none": "No session credential arrived with this request. The token is "
+                    "sent three ways (Authorization header, X-RailPulse-Token "
+                    "header, session cookie); none of them reached the server, so "
+                    "the hosting layer is dropping them. Open the app in its own "
+                    "browser tab — a frame is the usual cause.",
             "header": "The session token in the Authorization header is invalid or "
                       "expired.",
+            "custom_header": "The session token in the X-RailPulse-Token header is "
+                             "invalid or expired.",
             "cookie": "The session cookie is invalid or expired.",
+            "query": "The session token in the URL is invalid or expired.",
         }[source]
         try:
             from audit import log_event

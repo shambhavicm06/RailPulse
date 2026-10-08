@@ -1110,7 +1110,10 @@ function handleUnauthorised(detail){
   // credential never reached the server. Report what actually happened, and leave
   // a diagnostic trail the operator can quote.
   const hadToken = !!AUTH.get();
-  AUTH.clear();
+  // "No credential arrived" while we hold one is a *transport* problem, not an
+  // expired session: keep the token so the query-token retry can still succeed.
+  const transport = hadToken && /no session credential/i.test(detail || "");
+  if(!transport) AUTH.clear();
   PRINCIPAL = null;
   $("app").style.display = "none";
   $("auth").style.display = "flex";
@@ -1119,15 +1122,55 @@ function handleUnauthorised(detail){
     // No credential at all means the visitor has simply not signed in yet (or the
     // page was reloaded): that needs the sign-in form, not an error banner that
     // looks like a fault. A rejected credential is the case worth reporting.
-    err.textContent = hadToken
-      ? "⚠ " + (detail || "Session expired — please sign in again.")
-        + " (a session token was present but was rejected; try a hard refresh: Ctrl+Shift+R)"
-      : "";
+    if(transport){
+      err.textContent = "⚠ The server did not receive your session credential — this "
+        + "is the hosting layer, not your login. Opening the app in its own browser "
+        + "tab fixes it. Checking what the server received…";
+      describeTransport();
+    } else if(hadToken){
+      err.textContent = "⚠ " + (detail || "Session expired — please sign in again.")
+        + " (a session token was present but was rejected; try a hard refresh: Ctrl+Shift+R)";
+    } else {
+      err.textContent = "";
+    }
   }
   try{ console.warn("[railpulse] unauthorised", {detail, hadToken}); }catch(e){}
 }
 
-async function api(path, opts){
+function authHeaders(token){
+  return { "Authorization": "Bearer " + token, "X-RailPulse-Token": token };
+}
+function withQueryToken(path, token){
+  return path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(token);
+}
+
+/* Ask the server which credential carriers it actually received, and say so in
+   plain language. This turns "signed in but 401" from a mystery into a reading. */
+async function describeTransport(){
+  const box = $("authErr");
+  try{
+    const d = await fetch("/auth/diagnostics?cachebust=" + Date.now(),
+                          {credentials:"include"}).then(r => r.json());
+    const c = d.carriers || {};
+    const got = Object.entries({
+      "Authorization header": c.authorization_header,
+      "X-RailPulse-Token header": c.custom_header,
+      "session cookie": c.session_cookie,
+    }).filter(([, v]) => v).map(([k]) => k);
+    const names = (d.request && d.request.header_names) || [];
+    box.textContent = (got.length
+        ? "⚠ The server received only: " + got.join(", ") + ". "
+        : "⚠ The server received none of the three credential carriers. ")
+      + "Open the preview in its own browser tab (the frame blocks credentials). "
+      + (names.length ? "Headers seen: " + names.slice(0, 12).join(",") + "." : "");
+    try{ console.warn("[railpulse] transport diagnostics", d); }catch(e){}
+  }catch(e){
+    box.textContent = "⚠ The dashboard could not reach the backend at all. "
+      + "Start it with: python src/run.py";
+  }
+}
+
+async function api(path, opts, _retried){
   opts = opts || {};
   opts.headers = Object.assign({}, opts.headers || {});
   // "include" rather than "same-origin": an embedded frame can present an opaque
@@ -1135,8 +1178,24 @@ async function api(path, opts){
   // and silently drop the cookie.
   opts.credentials = "include";
   const token = AUTH.get();
-  if(token) opts.headers["Authorization"] = "Bearer " + token;
+  // Send the token two ways. Hosting layers differ: some strip `Authorization`
+  // (it can leak credentials upstream) while leaving unknown headers alone.
+  if(token) Object.assign(opts.headers, authHeaders(token));
   const r = await fetch(path, opts);
+
+  // Last resort: if the server says no credential reached it while we are holding
+  // one, the transport is at fault, not the session. Retry once with the token in
+  // the URL, which no header policy can remove. Only on this specific diagnosis —
+  // a rejected token must not be retried.
+  if((r.status === 401) && token && !_retried && path !== "/login"){
+    let detail = "";
+    try{ detail = (await r.clone().json()).detail || ""; }catch(e){}
+    if(/no session credential/i.test(detail)){
+      const retried = Object.assign({}, opts, {
+        headers: Object.assign({}, opts.headers), credentials: "include" });
+      return api(withQueryToken(path, token), retried, true);
+    }
+  }
   if(r.status === 401 || r.status === 403){
     let detail = "";
     try{ detail = (await r.clone().json()).detail || ""; }catch(e){}
@@ -1863,31 +1922,51 @@ $("tabRegister").addEventListener("click", () => {
 
 async function doLogin(){
   $("authErr").textContent = ""; $("authOk").textContent = "";
+
+  // Step 1 — authenticate. ONLY this step may report an access-denied verdict:
+  // it used to wrap the data load as well, so a post-login transport failure was
+  // announced as "ACCESS DENIED", blaming the operator's credentials for a
+  // problem that had nothing to do with them.
+  let res;
   try{
-    const res = await api("/login", {method:"POST", headers:{"Content-Type":"application/json"},
+    res = await api("/login", {method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify({username: $("user").value.trim(), password: $("pass").value.trim()})});
-    if(res.success){
-      if(!res.token){
-        // Never proceed "signed in" without a token: every later call would 401.
-        $("authErr").textContent = "⚠ Sign-in succeeded but the server returned no token — "
-          + "this deployment is misconfigured.";
-        return;
-      }
-      AUTH.set(res.token);
-      FULL_NAME = res.full_name || "Dispatcher";
-      PRINCIPAL = {username: res.username, role: res.role || "dispatcher"};
-      $("userName").textContent = FULL_NAME + (res.role ? ` · ${res.role}` : "");
-      $("auth").style.display = "none";
-      $("app").style.display = "block";
-      await loadAll();
-      refreshProvenanceBadge();
-    } else {
-      $("authErr").textContent = "⚠ ACCESS DENIED — " + (res.message || "invalid credentials");
-    }
   }catch(e){
     $("authErr").textContent = (e.message === "UNAUTHORISED" || e.message === "FORBIDDEN")
       ? "⚠ ACCESS DENIED — " + (e.detail || "invalid credentials")
       : "⚠ Backend offline — start FastAPI first (python src/run.py)";
+    return;
+  }
+  if(!res.success){
+    $("authErr").textContent = "⚠ ACCESS DENIED — " + (res.message || "invalid credentials");
+    return;
+  }
+  if(!res.token){
+    // Never proceed "signed in" without a token: every later call would 401.
+    $("authErr").textContent = "⚠ Sign-in succeeded but the server returned no token — "
+      + "this deployment is misconfigured.";
+    return;
+  }
+
+  AUTH.set(res.token);
+  FULL_NAME = res.full_name || "Dispatcher";
+  PRINCIPAL = {username: res.username, role: res.role || "dispatcher"};
+  $("userName").textContent = FULL_NAME + (res.role ? ` · ${res.role}` : "");
+  $("auth").style.display = "none";
+  $("app").style.display = "block";
+
+  // Step 2 — load data. A failure here is a *connection* problem: say so, and ask
+  // the server what it actually received. The session is left intact.
+  try{
+    await loadAll();
+    refreshProvenanceBadge();
+  }catch(e){
+    $("app").style.display = "none";
+    $("auth").style.display = "flex";
+    $("authErr").textContent = "⚠ Signed in as " + FULL_NAME
+      + ", but the dashboard could not load data ("
+      + (e.detail || e.message) + "). Checking the credential transport…";
+    describeTransport();
   }
 }
 

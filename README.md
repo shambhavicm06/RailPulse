@@ -555,15 +555,20 @@ Every operational endpoint returns **401** without a token and **403** if the
 role is insufficient, so the API can be tested for that property directly (see
 `tests/test_api.py`).
 
-The token is accepted over **either** transport — the `Authorization: Bearer`
-header or the `HttpOnly` `railpulse_token` cookie that `/login` also sets — so a
-deployment whose proxy strips headers, or whose embedded frame denies the page
-access to browser storage, still authenticates instead of showing
-"signed in, then 401 everywhere". The cookie is issued `SameSite=None; Secure`
-over HTTPS so it survives an embedded frame (where a `Lax` cookie counts as
-third-party and is never sent), and `SameSite=Lax` over plain HTTP for local
-development. A 401 says which credential was missing or rejected, and the reason
-is recorded in the audit trail as `auth_rejected`.
+The token is accepted over **four carriers** — `Authorization: Bearer`, an
+`X-RailPulse-Token` header, the `HttpOnly` session cookie, or a `?token=` retry —
+and any one of them is sufficient. Hosting layers differ: a proxy can strip
+`Authorization`, and a browser refuses a third-party cookie inside an embedded
+frame, either of which produces the confusing "signed in, then 401 everywhere".
+The cookie is issued `SameSite=None; Secure` over HTTPS (survives a frame) and
+`SameSite=Lax` over plain HTTP for local development. `GET /auth/diagnostics`
+reports which carriers the server actually received for the caller's own request
+(booleans only), and a 401 names the missing or rejected credential — that reason
+is also written to the audit trail as `auth_rejected`.
+
+Sign-in and data loading are separate steps on the dashboard: only the `/login`
+exchange can report an access-denied verdict, so a failure to load data is never
+announced as bad credentials.
 
 Nothing on the dashboard may call an authenticated endpoint before sign-in —
 `tests/boot_probe.mjs` executes the page's real JavaScript in Node and fails if

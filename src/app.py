@@ -400,6 +400,37 @@ def auth_config():
     return auth_status()
 
 
+@app.get("/auth/diagnostics")
+def auth_diagnostics(request: Request):
+    """Which credential carriers arrived with *this* request.
+
+    Public on purpose: it reports only booleans about the caller's own request —
+    never token material — so a client that cannot authenticate can say precisely
+    what the server did and did not receive. Without it, "signed in but
+    unauthorised" is indistinguishable from a broken application.
+    """
+    from auth import AUTH_ENABLED, TOKEN_HEADER
+
+    return {
+        "auth_enabled": AUTH_ENABLED,
+        "carriers": {
+            "authorization_header": bool(request.headers.get("authorization")),
+            "custom_header": bool(request.headers.get(TOKEN_HEADER)),
+            "session_cookie": bool(request.cookies.get(SESSION_COOKIE)),
+            "query_token": bool(request.query_params.get("token")
+                                or request.query_params.get("_t")),
+        },
+        "request": {
+            "host": request.headers.get("host"),
+            "origin": request.headers.get("origin"),
+            "scheme": request.url.scheme,
+            "forwarded_proto": request.headers.get("x-forwarded-proto"),
+            "cookie_names": sorted(request.cookies.keys()),
+            "header_names": sorted(name.lower() for name in request.headers.keys()),
+        },
+    }
+
+
 @app.get("/auth/me")
 def auth_me(principal: Principal = Depends(require_viewer)):
     """Validate a token and return the caller's identity + permissions."""

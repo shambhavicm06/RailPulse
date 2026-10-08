@@ -106,7 +106,7 @@ python -m pytest tests/test_pipeline.py -v
 
 ---
 
-## 4. Eleven genuine bugs found by probing the running system
+## 4. Twelve genuine bugs found by probing the running system
 
 All were pre-existing defects, found by comparing what the model *learned* with
 what the app *served*, and by driving the running system instead of trusting it.
@@ -290,7 +290,51 @@ since a proxy hides the real scheme from the app) and stays `SameSite=Lax` over
 plain HTTP, where local development needs no `Secure` flag. The server also runs
 with `--proxy-headers`.
 
-### 4.11 A filename collision silently served one model for nine quantile levels
+### 4.11 The login succeeded, and the app still said "ACCESS DENIED"
+
+Server log from the live preview:
+
+```
+GET  /                200     ← page load (no pre-auth call: 4.9 fixed)
+GET  /auth/config     200
+POST /login           200     ← authentication SUCCEEDED
+GET  /models          401     ← every data call unauthenticated
+GET  /exports         401
+GET  /stations        401
+```
+
+Two independent faults were visible at once:
+
+1. **Both credential carriers were lost in the frame.** The proxy strips
+   `Authorization`, and Chrome refuses a third-party cookie inside an embedded
+   frame, so requests arrived with no credential at all — while the operator was
+   in fact signed in.
+2. **The dashboard reported that as an authentication failure.** `doLogin` wrapped
+   the sign-in *and* the data load in one `try`, so the 401 from `loadAll()`
+   propagated into the login error handler and produced
+   "ACCESS DENIED — No session credential arrived…". A transport failure was
+   announced as bad credentials.
+
+*Fixes:*
+
+* `doLogin` is split: only the `/login` exchange may produce an access-denied
+  verdict; a failure while loading data says *"Signed in as X, but the dashboard
+  could not load data"* and leaves the session intact.
+* The token now travels on **four carriers** — `Authorization`,
+  `X-RailPulse-Token` (custom headers are rarely stripped), the session cookie,
+  and as a last-resort `?token=` retry that no header policy can remove. Any one
+  suffices; the token itself is identical. Verified individually: each carrier
+  authenticates alone, and a missing or invalid one still returns 401.
+* `GET /auth/diagnostics` (public, booleans only, never token material) reports
+  which carriers a request actually arrived with, and the dashboard reads it back
+  to the operator in plain language — which is how the cause above was confirmed
+  rather than guessed.
+
+> The `?token=` retry exists only because a frame can strip every header. Tokens
+> in URLs can appear in access logs, so it is the last resort and never the first
+> choice; opening the app in its own tab uses the cookie and needs no fallback.
+
+### 4.12 A filename collision silently served one model for nine quantile levels
 
 `Path.with_suffix` **replaces** the last suffix, so `q0.025` + `.txt` became
 `q0.txt`: all nine quantile models were written to one file, and serving loaded
