@@ -659,6 +659,240 @@ a.leaflet-popup-close-button{ color:var(--mut) !important; }
   border:1px solid rgba(255,255,255,.30);
 }
 :root[data-theme="light"] th{background:rgba(99,102,241,.14); color:#4338ca;}
+/* ================= FUTURISTIC RAILPULSE AI CONSOLE ================= */
+:root[data-theme="dark"]{
+  --bg:#070a16; --panel:rgba(13,19,39,.88); --panel2:rgba(13,19,39,.72);
+  --surface:rgba(17,25,51,.82); --surface-2:rgba(10,16,34,.80);
+  --line:rgba(139,158,255,.16); --subtle-line:rgba(139,158,255,.24);
+  --primary:#9b7bff; --primary-hover:#b39aff; --primary-active:#7959e8;
+  --primary-tint:rgba(139,111,255,.15); --focus-ring:rgba(92,145,255,.28);
+  --grad-brand:linear-gradient(130deg,#68a7ff 0%,#9c73ff 55%,#cb76ff 100%);
+  --grad-primary:linear-gradient(120deg,#4b84ff 0%,#765cff 54%,#a454f3 100%);
+  --neon:#78d8ff; --blue:#9ab9ff; --txt:#e8edff; --mut:#929fbe;
+  --input-bg:rgba(8,13,29,.92); --input-fg:#edf2ff;
+  --aside-bg:rgba(8,12,27,.96); --row-hover:rgba(110,132,255,.09);
+  --nav-active:rgba(116,94,255,.20); --gridline:rgba(133,150,255,.045);
+  --card-glow:0 0 42px rgba(87,91,255,.11); --brand-glow:0 0 22px rgba(102,166,255,.42);
+  --title-glow:0 0 20px rgba(128,133,255,.20);
+  --ocean:#080e1d; --land:#101a31; --land-stroke:#273858;
+  --roadcase:#070b16; --roadfill:#273858; --routeroad:#9e70ff;
+  --maplabel:#e6edff; --label-halo:rgba(6,10,24,.94);
+  --chip-bg:rgba(10,15,32,.88); --chip-fg:#e8edff;
+  --alert-med-bg:rgba(49,54,130,.17); --alert-med-glow:0 0 26px rgba(116,109,255,.16);
+  --surface:#101831; --headline:#f4f6ff;
+  --glass-border:rgba(133,155,255,.17);
+  --glass-shadow:0 14px 40px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035);
+}
+:root[data-theme="dark"] body{
+  min-height:100vh;
+  background:
+    radial-gradient(780px 520px at 12% -14%,rgba(77,105,255,.16),transparent 64%),
+    radial-gradient(740px 500px at 93% 3%,rgba(137,76,255,.15),transparent 62%),
+    radial-gradient(640px 440px at 50% 120%,rgba(40,113,204,.09),transparent 65%),
+    linear-gradient(155deg,#070a16 0%,#0a1022 54%,#080c19 100%);
+  background-attachment:fixed;
+}
+:root[data-theme="dark"] body::before{
+  display:block;
+  background-image:linear-gradient(rgba(127,146,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(127,146,255,.035) 1px,transparent 1px);
+  background-size:48px 48px;
+  mask-image:linear-gradient(180deg,rgba(0,0,0,.7),transparent 84%);
+}
+:root[data-theme="dark"] aside{
+  background:linear-gradient(180deg,rgba(8,12,28,.97),rgba(10,14,31,.94));
+  border-right:1px solid rgba(135,153,255,.15);
+  box-shadow:12px 0 44px rgba(0,0,0,.13);
+}
+:root[data-theme="dark"] aside .brand{border-bottom-color:rgba(135,153,255,.14);}
+:root[data-theme="dark"] aside .brand .logo,
+:root[data-theme="dark"] .brand .logo{
+  background:linear-gradient(115deg,#82bcff 0%,#a987ff 56%,#d187ff 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 14px rgba(115,127,255,.25));
+}
+:root[data-theme="dark"] aside .brand .tag,
+:root[data-theme="dark"] aside .userfoot .sub{color:#8996b6;}
+:root[data-theme="dark"] .navbtn{color:#929fbd;}
+:root[data-theme="dark"] .navbtn:hover{background:rgba(120,137,255,.09);color:#f2f3ff;}
+:root[data-theme="dark"] .navbtn.active{
+  background:linear-gradient(100deg,rgba(89,112,255,.23),rgba(134,77,255,.16));
+  color:#c0b4ff;box-shadow:inset 3px 0 0 #8e7bff,0 0 24px rgba(108,93,255,.10);
+}
+:root[data-theme="dark"] aside .userfoot{border-top-color:rgba(135,153,255,.14);}
+:root[data-theme="dark"] .topbar{
+  position:sticky;top:0;z-index:90;background:rgba(8,12,27,.82);
+  border-bottom:1px solid rgba(135,153,255,.15);box-shadow:0 12px 36px rgba(0,0,0,.12);
+  -webkit-backdrop-filter:blur(22px) saturate(145%);backdrop-filter:blur(22px) saturate(145%);
+}
+:root[data-theme="dark"] .topbar h1{text-shadow:0 0 28px rgba(109,133,255,.17);}
+:root[data-theme="dark"] .panel-box,:root[data-theme="dark"] .chip,:root[data-theme="dark"] .flow .step,
+:root[data-theme="dark"] .map-toolbar,:root[data-theme="dark"] .legend,:root[data-theme="dark"] .gps-stat,
+:root[data-theme="dark"] details,:root[data-theme="dark"] .authswitch,:root[data-theme="dark"] .msg-bot,
+:root[data-theme="dark"] .copilot-chips button,:root[data-theme="dark"] .stat-card{
+  background:linear-gradient(145deg,rgba(17,25,51,.91),rgba(11,17,36,.91));
+  border-color:var(--glass-border);box-shadow:var(--glass-shadow);
+}
+:root[data-theme="dark"] .panel-box:hover,:root[data-theme="dark"] .stat-card:hover,:root[data-theme="dark"] .chip:hover{
+  border-color:rgba(143,151,255,.30);box-shadow:0 18px 48px rgba(0,0,0,.29),0 0 32px rgba(98,88,255,.09);
+}
+:root[data-theme="dark"] .authcard{
+  background:linear-gradient(150deg,rgba(16,23,47,.96),rgba(10,15,31,.96));
+  border-color:rgba(149,160,255,.20);box-shadow:0 24px 90px rgba(0,0,0,.48),0 0 55px rgba(94,100,255,.13);
+}
+:root[data-theme="dark"] .authcard::before{content:"";display:block;height:3px;margin:-36px -40px 26px;background:var(--grad-primary);}
+:root[data-theme="dark"] .authcard input{background:rgba(7,12,27,.86);}
+:root[data-theme="dark"] #themeToggle{
+  background:rgba(13,19,39,.92);color:#c7d0f0;border:1px solid rgba(138,155,255,.20);
+  box-shadow:0 10px 30px rgba(0,0,0,.28),0 0 18px rgba(97,91,255,.09);
+}
+:root[data-theme="dark"] #themeToggle:hover{color:#fff;border-color:rgba(158,130,255,.50);box-shadow:0 0 24px rgba(119,95,255,.22);}
+:root[data-theme="dark"] th{background:rgba(33,43,79,.82);color:#b8c1ff;}
+:root[data-theme="dark"] tbody tr:nth-child(even) td{background:rgba(17,25,51,.48);}
+:root[data-theme="dark"] tbody tr:hover td{background:rgba(106,125,255,.10);}
+:root[data-theme="dark"] .field select,:root[data-theme="dark"] .field input{color-scheme:dark;}
+:root[data-theme="dark"] .sys-status{background:rgba(15,23,48,.78);border-color:rgba(139,158,255,.19);}
+:root[data-theme="dark"] .sys-status.on{color:#69e3c0;border-color:rgba(72,221,184,.30);}
+:root[data-theme="dark"] .sys-status.on .dot{background:#60e5c1;box-shadow:0 0 0 4px rgba(72,221,184,.10),0 0 14px rgba(72,221,184,.72);}
+:root[data-theme="dark"] .sc-blue{--sc:#63a8ff;--sc-tint:rgba(61,130,246,.16);--sc-soft:rgba(90,155,255,.23);}
+:root[data-theme="dark"] .sc-violet{--sc:#a783ff;--sc-tint:rgba(139,92,246,.18);--sc-soft:rgba(162,126,255,.24);}
+:root[data-theme="dark"] .sc-teal{--sc:#53d8e7;--sc-tint:rgba(34,211,238,.13);--sc-soft:rgba(34,211,238,.20);}
+:root[data-theme="dark"] .sc-rose{--sc:#ff83bf;--sc-tint:rgba(244,114,182,.14);--sc-soft:rgba(244,114,182,.20);}
+
+.hero{
+  display:grid;grid-template-columns:minmax(0,1.03fr) minmax(290px,.97fr);align-items:center;gap:20px;
+  min-height:322px;padding:clamp(22px,3vw,36px);margin-bottom:18px;border:1px solid rgba(151,154,255,.27);
+  border-radius:20px;background:
+    radial-gradient(560px 280px at 78% 44%,rgba(117,91,255,.25),transparent 70%),
+    radial-gradient(420px 260px at 5% 0%,rgba(54,151,255,.20),transparent 68%),
+    linear-gradient(116deg,rgba(17,28,65,.97) 0%,rgba(26,23,67,.96) 52%,rgba(33,20,68,.96) 100%);
+  box-shadow:0 26px 72px rgba(18,22,78,.34),inset 0 1px 0 rgba(255,255,255,.06);isolation:isolate;
+}
+.hero::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.55;
+  background:linear-gradient(115deg,transparent 0 37%,rgba(116,151,255,.08) 54%,transparent 75%);}
+.hero::after{right:-100px;top:-145px;width:360px;height:360px;opacity:.65;
+  background:radial-gradient(circle,rgba(120,104,255,.22),transparent 70%);}
+.hero-copy{position:relative;z-index:1;min-width:0;}
+.hero .hero-badge{display:inline-flex;align-items:center;gap:9px;background:rgba(6,13,32,.46);border-color:rgba(151,172,255,.30);color:#cfddff;}
+.hero h2{font-size:clamp(27px,3vw,40px);line-height:1.11;letter-spacing:-1.1px;margin:4px 0 14px;text-wrap:balance;}
+.hero p{max-width:600px;color:#bac7ea;font-size:14.5px;line-height:1.75;}
+.hero-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:17px;color:#98a8d2;font-size:10px;font-weight:750;letter-spacing:.12em;}
+.hero-meta b{color:#e7ebff;font-weight:700;letter-spacing:.02em;margin-left:5px;}
+.hero-live{display:inline-flex;align-items:center;gap:8px;color:#c8d5fa;}
+.hero-meta-divider{height:18px;width:1px;background:rgba(167,181,255,.22);}
+.pulse-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#70e8d0;box-shadow:0 0 0 4px rgba(112,232,208,.10),0 0 14px rgba(112,232,208,.82);animation:pulseDot 2s ease-in-out infinite;}
+@keyframes pulseDot{50%{opacity:.5;box-shadow:0 0 0 7px rgba(112,232,208,.04),0 0 8px rgba(112,232,208,.36);}}
+.hero .hero-actions{margin-top:20px;}
+.hero .btn{background:var(--grad-primary);color:#fff;border:1px solid rgba(255,255,255,.16);box-shadow:0 8px 25px rgba(66,83,224,.28);}
+.hero .btn:hover{filter:brightness(1.13);box-shadow:0 12px 30px rgba(101,83,255,.35);}
+.hero .btn.ghost{background:rgba(9,15,36,.32);color:#e2e8ff;border-color:rgba(162,172,255,.32);}
+.hero-network{position:relative;z-index:1;min-width:0;padding:13px 14px 10px;border:1px solid rgba(159,173,255,.16);border-radius:16px;
+  background:radial-gradient(ellipse at 50% 47%,rgba(85,104,235,.12),transparent 66%),rgba(5,11,28,.24);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 12px 36px rgba(0,0,0,.12);}
+.hero-network-heading,.network-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#aab7dc;font-size:9px;font-weight:800;letter-spacing:.14em;}
+.hero-network-live{display:inline-flex;align-items:center;gap:6px;color:#74e7c5;font-size:8px;}
+.hero-network-live i,.live-pill i{width:6px;height:6px;border-radius:50%;background:#65e6c1;box-shadow:0 0 10px rgba(101,230,193,.8);}
+.skill-network-svg{display:block;width:100%;height:auto;max-height:250px;overflow:visible;margin:4px auto 0;}
+.skill-orbit{fill:none;stroke:rgba(140,154,255,.15);stroke-width:1;stroke-dasharray:2 8;transform-origin:280px 151px;animation:orbitSpin 42s linear infinite;}
+@keyframes orbitSpin{to{transform:rotate(360deg);}}
+.skill-edges path{fill:none;stroke:url(#skillLine);stroke-width:1.25;stroke-opacity:.48;stroke-dasharray:4 5;animation:dashFlow 8s linear infinite;}
+@keyframes dashFlow{to{stroke-dashoffset:-72;}}
+.skill-packets circle{fill:#b4a5ff;filter:drop-shadow(0 0 5px rgba(155,133,255,.95));}
+.skill-node circle:first-child{fill:rgba(14,23,51,.96);stroke:rgba(122,163,255,.78);stroke-width:1.4;filter:drop-shadow(0 0 7px rgba(95,138,255,.52));}
+.skill-node:not(.skill-core) circle:first-child{animation:nodePulse 3.6s ease-in-out infinite;}
+.skill-node:nth-of-type(5) circle:first-child{animation-delay:.4s;}.skill-node:nth-of-type(6) circle:first-child{animation-delay:.8s;}
+.skill-node:nth-of-type(7) circle:first-child{animation-delay:1.2s;}.skill-node:nth-of-type(8) circle:first-child{animation-delay:1.6s;}
+@keyframes nodePulse{50%{stroke:#ba9aff;filter:drop-shadow(0 0 11px rgba(133,111,255,.78));}}
+.skill-core circle:first-child{fill:url(#skillCore);stroke:rgba(176,177,255,.92);stroke-width:1.5;filter:drop-shadow(0 0 15px rgba(126,106,255,.78));}
+.skill-core .core-ring{fill:none;stroke:rgba(135,140,255,.48);stroke-width:1;stroke-dasharray:3 5;animation:orbitSpin 18s linear infinite reverse;}
+.skill-core .core-name,.skill-core .core-sub,.skill-glyph,.skill-label{font-family:var(--font);text-anchor:middle;dominant-baseline:middle;pointer-events:none;}
+.skill-core .core-name{fill:#fff;font-size:8px;font-weight:800;letter-spacing:.09em;}
+.skill-core .core-sub{fill:#ced7ff;font-size:7px;font-weight:700;letter-spacing:.17em;}
+.skill-glyph{fill:#dce5ff;font-size:11px;font-weight:800;}
+.skill-label{fill:#bdc8e8;font-size:8px;font-weight:800;letter-spacing:.10em;}
+.network-caption{font-size:8px;letter-spacing:.08em;color:#8494bd;padding-top:2px;}
+.network-caption-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;background:#72e6d0;box-shadow:0 0 8px #72e6d0;}
+.dashboard-stats{margin-bottom:18px;}
+.stat-card{position:relative;overflow:hidden;}
+.stat-card::after{content:"";position:absolute;right:-35px;top:-47px;width:110px;height:110px;border-radius:50%;background:radial-gradient(circle,var(--sc-soft),transparent 70%);pointer-events:none;}
+.stat-card .ic{color:var(--sc);background:var(--sc-tint);border-radius:13px;}
+.stat-card .v{font-size:19px;letter-spacing:-.35px;}
+.dashboard-intel-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(300px,.85fr);gap:16px;align-items:stretch;margin:0 0 18px;}
+.dashboard-intel-grid>.panel-box{margin-top:0;min-width:0;}
+.intel-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:17px;}
+.intel-heading h3{font-size:16px;margin:2px 0 0;letter-spacing:.09em;}
+.section-kicker{font-size:9px;font-weight:800;letter-spacing:.17em;color:#8291bb;}
+.insight-chip,.live-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border:1px solid rgba(137,139,255,.24);border-radius:99px;background:rgba(106,93,255,.09);color:#c6bfff;font-size:9px;font-weight:800;letter-spacing:.1em;white-space:nowrap;}
+.insight-chip span{color:#bea7ff;font-size:12px;text-shadow:0 0 12px rgba(176,133,255,.78);}
+.insight-card{display:flex;align-items:flex-start;gap:15px;padding:17px;border:1px solid rgba(127,142,255,.18);border-radius:14px;
+  background:radial-gradient(360px 170px at 0 0,rgba(99,112,255,.14),transparent 72%),rgba(7,13,29,.58);}
+.insight-symbol{flex:0 0 37px;height:37px;border-radius:12px;display:grid;place-items:center;color:#d4c6ff;font-size:18px;
+  background:linear-gradient(135deg,rgba(81,150,255,.22),rgba(157,87,255,.28));border:1px solid rgba(151,142,255,.23);box-shadow:0 0 20px rgba(112,91,255,.15);}
+.insight-copy{min-width:0;}
+.insight-kicker{font-size:9px;font-weight:800;letter-spacing:.15em;color:#8dc8ff;}
+.insight-copy h4{margin:5px 0 6px;color:#edf0ff;font-size:15px;line-height:1.35;}
+.insight-copy p{margin:0;color:#9eabc9;font-size:12.5px;line-height:1.65;}
+.insight-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:13px;}
+.insight-facts>div{min-width:0;padding:9px 10px;border:1px solid rgba(126,144,255,.13);border-radius:10px;background:rgba(8,14,31,.48);}
+.insight-facts span{display:block;color:#7f8dae;font-size:8px;font-weight:800;letter-spacing:.11em;margin-bottom:4px;}
+.insight-facts b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#d9e0fa;font-size:11px;}
+.insight-cta{display:flex;align-items:center;justify-content:space-between;width:100%;margin-top:13px;padding:10px 12px;
+  color:#c7c0ff;background:rgba(100,88,255,.08);border:1px solid rgba(140,124,255,.21);border-radius:10px;font:700 11px var(--font);letter-spacing:.03em;transition:all .18s ease;}
+.insight-cta:hover{background:rgba(112,93,255,.17);border-color:rgba(163,143,255,.46);box-shadow:0 0 22px rgba(111,91,255,.12);}
+.insight-cta span{font-size:15px;}
+.pipeline-intro{margin:-7px 0 15px;color:#8f9cb9;font-size:11.5px;line-height:1.6;}
+.readiness-list{display:grid;gap:16px;margin-top:14px;}
+.readiness-row{display:grid;gap:7px;}
+.readiness-meta{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#a7b2d0;font-size:11px;}
+.readiness-meta>span{display:inline-flex;align-items:center;gap:8px;}
+.readiness-meta>span i{width:7px;height:7px;border-radius:50%;background:#66708c;box-shadow:0 0 0 3px rgba(102,112,140,.11);}
+.readiness-meta>b{color:#7885a7;font-size:8px;letter-spacing:.12em;white-space:nowrap;}
+.readiness-row.is-ready .readiness-meta>span i{background:#67e4ca;box-shadow:0 0 0 3px rgba(103,228,202,.10),0 0 11px rgba(103,228,202,.68);}
+.readiness-row.is-ready .readiness-meta>b{color:#86e8d1;}
+.readiness-row.is-offline .readiness-meta>span i{background:#fb7891;box-shadow:0 0 9px rgba(251,120,145,.48);}
+.readiness-row.is-offline .readiness-meta>b{color:#ff9caf;}
+.readiness-track{height:6px;width:100%;overflow:hidden;border-radius:999px;background:rgba(107,122,171,.13);box-shadow:inset 0 1px 2px rgba(0,0,0,.35);}
+.readiness-track>span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#4b8fff 0%,#7771ff 54%,#c46fff 100%);box-shadow:0 0 10px rgba(119,117,255,.65);transition:width 850ms cubic-bezier(.19,1,.22,1);position:relative;}
+.readiness-row.is-ready .readiness-track>span::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 10%,rgba(255,255,255,.45) 48%,transparent 80%);transform:translateX(-100%);animation:progressShimmer 3.2s ease-in-out infinite;}
+@keyframes progressShimmer{to{transform:translateX(120%);}}
+.pipeline-note{display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:13px;border-top:1px solid rgba(133,150,255,.12);color:#7f8eae;font-size:10px;line-height:1.5;}
+.pipeline-note-dot{width:6px;height:6px;border-radius:50%;flex:none;background:#8e87ff;box-shadow:0 0 9px rgba(142,135,255,.75);}
+.dashboard-quickstart{grid-template-columns:1fr;margin-bottom:0;}
+.dashboard-quickstart .panel-box{margin-top:0;}
+.quickstart-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}
+.quickstart-steps>div{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid rgba(129,145,255,.12);border-radius:10px;background:rgba(8,14,30,.38);}
+.quickstart-steps>div>span{color:#a595ff;font:800 10px var(--font);letter-spacing:.08em;}
+.quickstart-steps p{margin:0;color:#9aa8c7;font-size:11px;line-height:1.6;}
+.quickstart-steps b{color:#dce2ff;}
+:root[data-theme="dark"] .hero-network{border-color:rgba(159,173,255,.19);}
+:root[data-theme="dark"] .hero .btn.ghost:hover{background:rgba(100,119,255,.20);border-color:rgba(196,180,255,.54);}
+
+@media(max-width:1050px){
+  .hero{grid-template-columns:minmax(0,1fr) minmax(260px,.85fr);}
+  .dashboard-intel-grid{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:820px){
+  .hero{grid-template-columns:1fr;}
+  .hero-network{max-width:620px;width:100%;justify-self:center;}
+  .dashboard-intel-grid{grid-template-columns:1fr;}
+}
+@media(max-width:560px){
+  .hero{padding:22px 18px;gap:18px;}
+  .hero h2{font-size:28px;}
+  .hero-meta{font-size:9px;}
+  .hero-network{padding:10px 8px;}
+  .network-caption{font-size:7px;}
+  .dashboard-intel-grid{gap:12px;}
+  .insight-facts{grid-template-columns:1fr;}
+  .insight-facts>div{display:flex;justify-content:space-between;gap:10px;}
+  .insight-facts span{margin:0;}
+  .insight-facts b{max-width:60%;text-align:right;}
+  .quickstart-steps{grid-template-columns:1fr;}
+  :root[data-theme="dark"] .authcard::before{margin:-26px -22px 18px;}
+}
+@media(prefers-reduced-motion:reduce){
+  :root[data-theme="dark"] *,:root[data-theme="dark"] *::before,:root[data-theme="dark"] *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;}
+}
+
 </style>
 </head>
 <body>
@@ -725,8 +959,8 @@ a.leaflet-popup-close-button{ color:var(--mut) !important; }
       <main>
           <div class="topbar">
           <div>
-            <h1 id="pageTitle">INDIAN RAILWAY NETWORK — CASCADE ANALYSIS</h1>
-            <div class="sub" id="pageSub">Graph-Derived Feature Boosting · Network-Aware Delay Prediction</div>
+            <h1 id="pageTitle">RAILPULSE AI · OPERATIONS INTELLIGENCE</h1>
+            <div class="sub" id="pageSub">Network-aware predictions · cascade analysis · dispatcher intelligence</div>
           </div>
           <div class="topbar-right">
             <span class="prov-badge" id="provenanceBadge" title="Data provenance">
@@ -740,33 +974,77 @@ a.leaflet-popup-close-button{ color:var(--mut) !important; }
         <section class="page active" id="page-dashboard">
           <div id="statusChips"></div>
           <div class="hero">
-            <div style="flex:1;min-width:280px;">
-              <span class="hero-badge">Rail Operations · AI Analytics</span>
-              <h2>Graph-based train delay prediction &amp; cascade impact analysis</h2>
-              <p>Predict how a delay at one station ripples across the Indian Railways network.
-                 Enter a train's current status and RailPulse maps the cascade — affected stations,
-                 risk level and suggested actions — in seconds.</p>
+            <div class="hero-copy">
+              <span class="hero-badge"><span class="pulse-dot"></span> AI RAIL OPERATIONS · CONTROL ROOM</span>
+              <h2>Understand the network<br>before the delay moves.</h2>
+              <p>Graph-aware delay forecasts, cascade analysis and dispatcher intelligence —
+                 connected in one operational view. Explore a scenario or inspect how the AI systems work together.</p>
+              <div class="hero-meta">
+                <span class="hero-live"><i class="pulse-dot"></i><b id="heroNetworkStatus">Network initializing</b></span>
+                <span class="hero-meta-divider"></span>
+                <span>ACTIVE MODEL <b id="heroModelName">Loading…</b></span>
+              </div>
               <div class="hero-actions">
-                <button class="btn small" data-go="prediction">🚆 Predict a delay</button>
-                <button class="btn small ghost" data-go="graph">🗺 Open network map</button>
+                <button class="btn small" data-go="prediction">✦ Run a prediction</button>
+                <button class="btn small ghost" data-go="graph">◎ Explore rail network</button>
               </div>
             </div>
+            <div class="hero-network" aria-label="Connected RailPulse AI skill network visualization">
+              <div class="hero-network-heading"><span>AI SKILL NETWORK</span><span class="hero-network-live"><i></i> CONNECTED</span></div>
+              <svg class="skill-network-svg" viewBox="0 0 560 310" role="img" aria-labelledby="skillSvgTitle skillSvgDesc">
+                <title id="skillSvgTitle">RailPulse AI skill network</title>
+                <desc id="skillSvgDesc">Delay prediction, railway graph analytics, cascade risk, dispatcher copilot and scenario simulation connect through the RailPulse AI core.</desc>
+                <defs>
+                  <linearGradient id="skillLine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4b8dff"/><stop offset="1" stop-color="#a16bff"/></linearGradient>
+                  <radialGradient id="skillCore" cx="35%" cy="25%"><stop offset="0" stop-color="#687bff"/><stop offset="1" stop-color="#30205f"/></radialGradient>
+                  <filter id="skillGlow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                  <filter id="coreGlow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="11" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                </defs>
+                <circle class="skill-orbit" cx="280" cy="151" r="101"/>
+                <g class="skill-edges">
+                  <path d="M280 151 L112 72"/><path d="M280 151 L448 72"/><path d="M280 151 L112 230"/><path d="M280 151 L280 265"/><path d="M280 151 L448 230"/>
+                  <path d="M112 72 Q280 8 448 72"/><path d="M448 72 Q510 153 448 230"/><path d="M448 230 Q280 302 112 230"/><path d="M112 230 Q50 153 112 72"/>
+                </g>
+                <g class="skill-packets"><circle r="3"><animateMotion dur="4.8s" repeatCount="indefinite" path="M112 72 Q190 108 280 151"/></circle><circle r="3"><animateMotion dur="5.5s" begin="1s" repeatCount="indefinite" path="M448 230 Q366 190 280 151"/></circle><circle r="2.5"><animateMotion dur="6s" begin="2s" repeatCount="indefinite" path="M280 151 L448 72"/></circle></g>
+                <g class="skill-node skill-core"><circle cx="280" cy="151" r="39"/><circle class="core-ring" cx="280" cy="151" r="47"/><text class="core-name" x="280" y="148">RAILPULSE</text><text class="core-sub" x="280" y="163">AI CORE</text></g>
+                <g class="skill-node"><circle cx="112" cy="72" r="23"/><text class="skill-glyph" x="112" y="77">ML</text><text class="skill-label" x="112" y="111">PREDICTOR</text></g>
+                <g class="skill-node"><circle cx="448" cy="72" r="23"/><text class="skill-glyph" x="448" y="77">G</text><text class="skill-label" x="448" y="111">RAIL GRAPH</text></g>
+                <g class="skill-node"><circle cx="112" cy="230" r="23"/><text class="skill-glyph" x="112" y="235">Δ</text><text class="skill-label" x="112" y="270">CASCADE</text></g>
+                <g class="skill-node"><circle cx="280" cy="265" r="23"/><text class="skill-glyph" x="280" y="270">AI</text><text class="skill-label" x="280" y="304">COPILOT</text></g>
+                <g class="skill-node"><circle cx="448" cy="230" r="23"/><text class="skill-glyph" x="448" y="235">↗</text><text class="skill-label" x="448" y="270">SIMULATOR</text></g>
+              </svg>
+              <div class="network-caption"><span><i class="network-caption-dot"></i> 5 connected capabilities</span><span>GRAPH · ML · OPERATIONS</span></div>
+            </div>
           </div>
-          <div class="grid">
-            <div class="stat-card sc-blue"><div class="ic">🚆</div><div class="t">Delay Prediction</div><div class="v">Live ML</div><div class="d">Forecast a train's arrival delay from its current status.</div></div>
-            <div class="stat-card sc-violet"><div class="ic">🌊</div><div class="t">Cascade Impact</div><div class="v">3-hop ripple</div><div class="d">Shows which nearby stations a delay will affect, hop by hop.</div></div>
-            <div class="stat-card sc-teal"><div class="ic">🛰</div><div class="t">Live Tracking</div><div class="v">GPS → risk</div><div class="d">Track a train and recompute risk at every position — live or simulated.</div></div>
-            <div class="stat-card sc-rose" id="statModelsCard"><div class="ic">🧠</div><div class="t">ML Models</div><div class="v" id="statModelsCount">5 ML Models</div><div class="d" id="statModelsDesc">Five trained models — pick any one for every prediction.</div></div>
-                      </div>
-          <div class="grid">
-            <div class="panel-box"><h3>▶ Quick start</h3>
-              <div class="muted" style="line-height:2;">
-                1. Go to <b style="color:var(--neon);">Delay Prediction</b> and enter a live train status.<br>
-                2. Watch the <b style="color:var(--neon);">Network Analysis</b> map animate the cascade (scroll to zoom, drag to pan).<br>
-                3. Upload batches via <b style="color:var(--neon);">Import Dataset</b> and open any row as a full prediction.
-              </div></div>
-            
+          <div class="grid dashboard-stats">
+            <div class="stat-card sc-blue"><div class="ic">✦</div><div class="t">Delay Prediction</div><div class="v">Graph-aware ML</div><div class="d">Forecast arrival delay from train and network conditions.</div></div>
+            <div class="stat-card sc-violet"><div class="ic">⌁</div><div class="t">Cascade Impact</div><div class="v">3-hop analysis</div><div class="d">Trace modeled delay pressure through nearby stations.</div></div>
+            <div class="stat-card sc-teal"><div class="ic">◉</div><div class="t">Live Tracking</div><div class="v">GPS → risk</div><div class="d">Follow a live device position or run the simulated route.</div></div>
+            <div class="stat-card sc-rose" id="statModelsCard"><div class="ic">◈</div><div class="t">ML Models</div><div class="v" id="statModelsCount">Loading models…</div><div class="d" id="statModelsDesc">Loading trained model catalog.</div></div>
           </div>
+          <div class="dashboard-intel-grid">
+            <section class="panel-box ai-insights-panel">
+              <div class="intel-heading"><div><span class="section-kicker">MODEL TELEMETRY</span><h3>AI INSIGHTS</h3></div><span class="insight-chip"><span>✦</span> LIVE</span></div>
+              <div class="insight-card"><div class="insight-symbol">✦</div><div class="insight-copy"><span class="insight-kicker" id="aiInsightKicker">SYSTEM STARTUP</span><h4 id="aiInsightTitle">Connecting to RailPulse intelligence…</h4><p id="aiInsightBody">System status and network details will appear here once the dashboard finishes loading.</p></div></div>
+              <div class="insight-facts"><div><span>ACTIVE MODEL</span><b id="insightModelName">—</b></div><div><span>NETWORK GRAPH</span><b id="insightNetworkSize">—</b></div><div><span>FEATURE LAYER</span><b id="insightFeatureCount">—</b></div></div>
+              <button class="insight-cta" data-go="copilot">Open dispatcher copilot <span>↗</span></button>
+            </section>
+            <section class="panel-box pipeline-panel">
+              <div class="intel-heading"><div><span class="section-kicker">LIVE SERVICE STATUS</span><h3>AI PIPELINE</h3></div><span class="live-pill"><i></i> MONITORING</span></div>
+              <p class="pipeline-intro">Glowing indicators show which analysis modules are available. They are system-status meters, not forecast confidence.</p>
+              <div class="readiness-list">
+                <div class="readiness-row" id="readyModel"><div class="readiness-meta"><span><i></i> Delay predictor</span><b id="readyModelState">CONNECTING</b></div><div class="readiness-track"><span id="readyModelBar"></span></div></div>
+                <div class="readiness-row" id="readyNetwork"><div class="readiness-meta"><span><i></i> Rail graph index</span><b id="readyNetworkState">CONNECTING</b></div><div class="readiness-track"><span id="readyNetworkBar"></span></div></div>
+                <div class="readiness-row" id="readyCopilot"><div class="readiness-meta"><span><i></i> Dispatcher copilot</span><b id="readyCopilotState">CONNECTING</b></div><div class="readiness-track"><span id="readyCopilotBar"></span></div></div>
+              </div>
+              <div class="pipeline-note"><span class="pipeline-note-dot"></span> Forecasts are model projections from the supplied scenario.</div>
+            </section>
+          </div>
+          <div class="grid dashboard-quickstart"><div class="panel-box"><h3>▶ QUICK START</h3><div class="quickstart-steps">
+            <div><span>01</span><p>Enter train status in <b>Delay Prediction</b>.</p></div>
+            <div><span>02</span><p>Inspect the modeled ripple in <b>Network Analysis</b>.</p></div>
+            <div><span>03</span><p>Ask the Copilot for a route, bottleneck or what-if.</p></div>
+          </div></div></div>
         </section>
 
         <!-- ===== PREDICTION ===== -->
@@ -1251,14 +1529,18 @@ let tileOnline = null, labelTimer = null;
 
 /* ============ THEME ============ */
 function isLight(){ return document.documentElement.getAttribute("data-theme") === "light"; }
+const THEME_KEY = "railpulse_theme_v2";
 function applyTheme(t){
   document.documentElement.setAttribute("data-theme", t);
-  $("themeToggle").textContent = t === "light" ? "☀️ Light" : "🌙 Dark";
-  try{ localStorage.setItem("railpulse_theme", t); }catch(e){}
+  const toggle = $("themeToggle");
+  toggle.textContent = t === "dark" ? "☀ Light" : "☾ Dark";
+  toggle.title = t === "dark" ? "Switch to the light theme" : "Switch to the dark theme";
+  toggle.setAttribute("aria-label", toggle.title);
+  try{ localStorage.setItem(THEME_KEY, t); }catch(e){}
   if(GRAPH){ applyVisual(); }
   applyThemeBase();
 }
-applyTheme((function(){ try{ return localStorage.getItem("railpulse_theme") || "light"; }catch(e){ return "light"; } })());
+applyTheme((function(){ try{ return localStorage.getItem(THEME_KEY) || "dark"; }catch(e){ return "dark"; } })());
 $("themeToggle").addEventListener("click", () => applyTheme(isLight() ? "dark" : "light"));
 
 /* ============ NAVIGATION ============ */
@@ -1277,7 +1559,7 @@ const NAV = [
   ["about","ℹ️","About"],
 ];
 const TITLES = {
-  dashboard:["Indian Railway Network — Cascade Analysis","Graph-derived feature boosting · network-aware delay prediction"],
+  dashboard:["RailPulse AI · Operations Intelligence","Network-aware prediction · cascade analysis · dispatcher intelligence"],
   prediction:["Delay Prediction","Enter a train's current status to forecast delays and cascade risk"],
   copilot:["Dispatcher Copilot","Ask the network in plain language — AI over live graph analytics"],
   graph:["Network Analysis","Interactive rail grid · incident → cascade path → critical hubs"],
@@ -2082,6 +2364,19 @@ async function loadStations(){
   setSelect($("gpsOrigin"), "Mysuru");
   setSelect($("gpsDest"), "KSR Bengaluru");
 }
+function setDashboardReadiness(rowId, barId, stateId, ready, label){
+  const row = $(rowId), bar = $(barId), state = $(stateId);
+  if(!row || !bar || !state) return;
+  row.classList.toggle("is-ready", !!ready);
+  row.classList.toggle("is-offline", !ready);
+  bar.style.width = ready ? "100%" : "0%";
+  state.textContent = label;
+}
+function setAiInsight(kicker, title, body){
+  if($("aiInsightKicker")) $("aiInsightKicker").textContent = kicker;
+  if($("aiInsightTitle")) $("aiInsightTitle").textContent = title;
+  if($("aiInsightBody")) $("aiInsightBody").textContent = body;
+}
 async function loadStatus(){
   const o = await api("/system/overview");
   const chip = (k, v, neon) => `<div class="chip"><div class="k">${k}</div><div class="v ${neon?'neon':''}">${v}</div></div>`;
@@ -2092,6 +2387,17 @@ async function loadStatus(){
     chip("GRAPH FEATURES", `${o.n_features} flattened columns`) +
     chip("TRAIN / TEST", `${o.n_train} / ${o.n_test} journeys`) +
     chip("NETWORK VER", o.network_version || "—", true);
+
+  const modelName = o.model || "Unavailable";
+  const stationCount = Number(o.n_stations || 0), edgeCount = Number(o.n_edges || 0);
+  if($("heroModelName")) $("heroModelName").textContent = modelName;
+  if($("heroNetworkStatus")) $("heroNetworkStatus").textContent = stationCount ? `${stationCount} stations indexed` : "Network unavailable";
+  if($("insightModelName")) $("insightModelName").textContent = modelName;
+  if($("insightNetworkSize")) $("insightNetworkSize").textContent = `${stationCount} nodes · ${edgeCount} links`;
+  if($("insightFeatureCount")) $("insightFeatureCount").textContent = `${Number(o.n_features || 0)} model features`;
+  setAiInsight("SYSTEM OVERVIEW", "Topology-aware predictor is ready", `${modelName} is active across a graph of ${stationCount} stations and ${edgeCount} links, using ${Number(o.n_features || 0)} model features. Run a scenario to surface route-specific delay and cascade signals.`);
+  setDashboardReadiness("readyModel", "readyModelBar", "readyModelState", !!o.model, o.model ? "MODEL LOADED" : "UNAVAILABLE");
+  setDashboardReadiness("readyNetwork", "readyNetworkBar", "readyNetworkState", stationCount > 0 && edgeCount > 0, stationCount > 0 ? `${stationCount} NODES` : "UNAVAILABLE");
   const ss = $("sysStatus");
   if(ss){ ss.className = "sys-status on"; ss.innerHTML = "<span class=\"dot\"></span> System Online"; }
 }
@@ -2313,9 +2619,24 @@ async function loadAffectedTrains(payload, horizon){
   }
 }
 
+function updateDashboardInsightFromPrediction(res){
+  const a = res.alert || {};
+  const level = String(a.level || "LOW").toUpperCase();
+  const source = a.source || $("fCurrent")?.value || "the selected station";
+  const model = res.model || "the active model";
+  const predicted = Number(res.predicted_destination_arrival_delay_min);
+  const delayText = Number.isFinite(predicted) ? `${Math.round(predicted)} min` : "an unavailable delay";
+  const top = (a.at_risk_stations || [])[0];
+  const title = top ? `${top.station} is the leading modeled pressure point` : "No downstream station crosses the current threshold";
+  const body = top
+    ? `For the supplied scenario at ${source}, ${model} estimates ${delayText} at destination. The first modeled pressure point is ${top.station} (~${top.projected_impact_min} min, hop ${top.hop}). This is a scenario projection, not a live train feed.`
+    : `For the supplied scenario at ${source}, ${model} estimates ${delayText} at destination. No downstream station crossed the alert threshold in this projection. This is a scenario result, not a live train feed.`;
+  setAiInsight(`PREDICTION INSIGHT · ${level}`, title, body);
+}
 function renderResult(res){
   const a = res.alert || {};
   const level = a.level || "LOW", color = levelVar(level);
+  updateDashboardInsightFromPrediction(res);
   const risk = a.at_risk_stations || [];
   const rows = risk.slice(0,5).map(r => `<li>${esc(r.station)} — ~${r.projected_impact_min} min (hop ${r.hop})</li>`).join("")
     || "<li>No downstream stations projected above threshold.</li>";
@@ -2474,10 +2795,15 @@ function renderCopilotChips(){
 }
 function loadCopilotStatus(){
   api("/copilot/status").then(s => {
-    $("copilotStatus").innerHTML = s.mode === "llm"
+    const llm = s.mode === "llm";
+    $("copilotStatus").innerHTML = llm
       ? `<b style="color:var(--green);">● LLM agent active</b> (${esc(s.model)}) — model composes answers from live tool results.`
       : `<b style="color:var(--neon);">● Offline agent active</b> — deterministic tool-calling. Set <span class="mono">COPILOT_LLM_KEY</span> to enable an LLM.`;
-  }).catch(() => { $("copilotStatus").textContent = "Copilot backend offline."; });
+    setDashboardReadiness("readyCopilot", "readyCopilotBar", "readyCopilotState", true, llm ? "LLM ACTIVE" : "LOCAL AGENT");
+  }).catch(() => {
+    $("copilotStatus").textContent = "Copilot backend unavailable.";
+    setDashboardReadiness("readyCopilot", "readyCopilotBar", "readyCopilotState", false, "UNAVAILABLE");
+  });
 }
 async function sendCopilot(){
   const input = $("copilotInput");
